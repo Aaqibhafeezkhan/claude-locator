@@ -6,3 +6,5 @@ dist/
 plugin/.claude-plugin/types/
 .pnpm-store/
 .claude/
+.angular/
+.astro/

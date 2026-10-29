@@ -5,24 +5,17 @@ import { pathToFileURL } from 'node:url'
 import { searchForWorkspaceRoot, type HtmlTagDescriptor, type Plugin } from 'vite'
 import { startClaudeLocator, type ClientOptions } from './client'
 import { patchReactDevtoolsHook } from './devtools-hook'
-import { editorOpener, type EditorWindow } from './editor'
-import { DEFAULT_LOCATION_FORMAT, DEFAULT_OPENCODE_URL, opencodeOpener } from './opencode'
-import { claudeOpener, createOpenHandler, DEFAULT_SIGNAL_FILE, ENDPOINT, type Opener, type OpenSignal } from './server'
+import type { EditorWindow } from './editor'
+import { DEFAULT_LOCATION_FORMAT, DEFAULT_OPENCODE_URL } from './opencode'
+import { createOpenHandler, DEFAULT_SIGNAL_FILE, ENDPOINT, type OpenSignal } from './server'
+import { createOpeners, describeTargets, serverTargets, type OpenTarget } from './targets'
 import { addAstroSourceAttributes, addVueSourceAttributes, type AstroCompiler, type VueCompiler } from './templates'
 import { addSourceAttributes, COMPONENT_SOURCE_PROPERTY, shouldTransform, SOURCE_ATTRIBUTE } from './transform'
 
 export type { OpenSignal }
 export { COMPONENT_SOURCE_PROPERTY, DEFAULT_LOCATION_FORMAT, DEFAULT_OPENCODE_URL, DEFAULT_SIGNAL_FILE, ENDPOINT, SOURCE_ATTRIBUTE }
 
-/**
- * Where a click sends the source:
- * - `'claude'`: the Claude desktop app's Files pane, through the claude-locator Claude Code plugin;
- * - `'editor'`: a code editor through its command-line launcher (Cursor, VS Code, Windsurf, Zed, WebStorm, ...);
- * - `'clipboard'`: the clipboard, as `locationFormat`, to paste into any agent's prompt (Codex, OpenCode, ...);
- * - `'opencode'`: the prompt of a running OpenCode TUI, as `locationFormat`;
- * - a function: called on the dev server with the location, for any other tool.
- */
-export type OpenTarget = 'claude' | 'editor' | 'clipboard' | 'opencode' | ((location: OpenSignal) => void | Promise<void>)
+export type { OpenTarget }
 
 export interface ClaudeLocatorOptions {
   /** Where a click opens. Default: `['claude']`. */
@@ -134,7 +127,7 @@ export default function claudeLocator(options: ClaudeLocatorOptions = {}): Plugi
   let astroCompiler: Promise<AstroCompiler | undefined> | undefined
 
   const clientCode = (): string => {
-    const hasServerTarget = targets.some((target) => target !== 'clipboard')
+    const hasServerTarget = serverTargets(targets).length > 0
     const clientOptions: ClientOptions = {
       endpoint: hasServerTarget ? `${base.replace(/\/?$/, '/')}${ENDPOINT}` : null,
       copyFormat: targets.includes('clipboard') ? (options.locationFormat ?? DEFAULT_LOCATION_FORMAT) : null,
@@ -161,24 +154,13 @@ export default function claudeLocator(options: ClaudeLocatorOptions = {}): Plugi
 
     configureServer(server) {
       // The clipboard is written in the page, which holds the click's permission to; the rest run here
-      const serverTargets = targets.filter((target) => target !== 'clipboard')
-      const openers: Opener[] = serverTargets.map((target) => {
-        switch (target) {
-          case 'claude':
-            return claudeOpener(path.resolve(workspaceRoot, signalFile))
-          case 'editor':
-            return editorOpener(options.editor, { workspaceRoot, window: options.editorWindow })
-          case 'opencode':
-            return opencodeOpener({ workspaceRoot, url: options.opencodeUrl, format: options.locationFormat })
-          default:
-            return target
-        }
-      })
-      const targetNames = serverTargets.map((target) => (typeof target === 'string' ? target : 'function')).join(', ')
+      const openers = createOpeners(targets, { ...options, workspaceRoot, signalFile })
+      const targetNames = describeTargets(serverTargets(targets))
       const { logger } = server.config
       server.middlewares.use(
         createOpenHandler({
           workspaceRoot,
+          projectRoot,
           openers,
           onOpen: (signal) =>
             logger.info(

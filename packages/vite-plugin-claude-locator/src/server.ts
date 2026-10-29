@@ -31,24 +31,32 @@ const realPathOrSelf = (target: string): string => {
   }
 }
 
+const isFile = (target: string): boolean => {
+  try {
+    return fs.statSync(target).isFile()
+  } catch {
+    return false
+  }
+}
+
 /**
- * Resolves the `file` the client sent (absolute, or relative to the workspace root)
- * to an absolute path of an existing file inside the workspace, or `undefined`.
+ * Resolves the `file` the client sent (absolute, or relative to the workspace root, or to the project root where
+ * a framework writes paths that way, as Angular does) to an absolute path of an existing file inside the
+ * workspace, or `undefined`.
  */
-export const resolveSourceFile = (file: string, workspaceRoot: string): string | undefined => {
+export const resolveSourceFile = (file: string, workspaceRoot: string, projectRoot?: string): string | undefined => {
   if (!file || file.includes('\0')) {
     return undefined
   }
   const root = realPathOrSelf(path.resolve(workspaceRoot))
-  const target = realPathOrSelf(path.resolve(root, file))
-  if (!isInside(target, root)) {
-    return undefined
+  const bases = projectRoot && !path.isAbsolute(file) ? [root, path.resolve(projectRoot)] : [root]
+  for (const base of bases) {
+    const target = realPathOrSelf(path.resolve(base, file))
+    if (isInside(target, root) && isFile(target)) {
+      return target
+    }
   }
-  try {
-    return fs.statSync(target).isFile() ? target : undefined
-  } catch {
-    return undefined
-  }
+  return undefined
 }
 
 const positiveInt = (value: string | null): number | undefined => {
@@ -75,7 +83,14 @@ export const claudeOpener =
 
 export interface OpenHandlerOptions {
   workspaceRoot: string
+  /** Where relative paths may also start from. */
+  projectRoot?: string
   openers: Opener[]
+  /**
+   * The pages allowed to call, for a server on its own port (CORS). Without it, only the dev server's own pages
+   * may: cross-site requests are refused.
+   */
+  isAllowedOrigin?: (origin: string) => boolean
   now?: () => number
   /** Called for each location handed to the targets. */
   onOpen?: (signal: OpenSignal) => void
@@ -88,7 +103,15 @@ type Next = (error?: unknown) => void
  * Connect middleware for `<base>/__claude-open?file=<path>&line=<n>&column=<n>`.
  * 204 when at least one target took it, 500 when all failed, 400 for a file outside the workspace, 403 for a cross-site request.
  */
-export const createOpenHandler = ({ workspaceRoot, openers, now = Date.now, onOpen, onError }: OpenHandlerOptions) =>
+export const createOpenHandler = ({
+  workspaceRoot,
+  projectRoot,
+  openers,
+  isAllowedOrigin,
+  now = Date.now,
+  onOpen,
+  onError,
+}: OpenHandlerOptions) =>
   async (req: IncomingMessage, res: ServerResponse, next: Next): Promise<void> => {
     const url = new URL(req.url ?? '/', 'http://localhost')
     if (!url.pathname.endsWith(`/${ENDPOINT}`)) {
@@ -97,7 +120,18 @@ export const createOpenHandler = ({ workspaceRoot, openers, now = Date.now, onOp
     }
 
     // Any page the browser has open could call a localhost URL; only the app itself may
-    if (req.headers['sec-fetch-site'] === 'cross-site') {
+    const origin = req.headers.origin
+    if (isAllowedOrigin) {
+      if (origin && !isAllowedOrigin(origin)) {
+        res.statusCode = 403
+        res.end(`claude-locator: ${origin} may not call this server`)
+        return
+      }
+      if (origin) {
+        res.setHeader('Access-Control-Allow-Origin', origin)
+        res.setHeader('Vary', 'Origin')
+      }
+    } else if (req.headers['sec-fetch-site'] === 'cross-site') {
       res.statusCode = 403
       res.end('claude-locator: cross-site requests are refused')
       return
@@ -108,7 +142,7 @@ export const createOpenHandler = ({ workspaceRoot, openers, now = Date.now, onOp
       return
     }
 
-    const file = resolveSourceFile(url.searchParams.get('file') ?? '', workspaceRoot)
+    const file = resolveSourceFile(url.searchParams.get('file') ?? '', workspaceRoot, projectRoot)
     if (!file) {
       res.statusCode = 400
       res.end(`claude-locator: file must be an existing file inside ${workspaceRoot}`)

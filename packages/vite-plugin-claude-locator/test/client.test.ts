@@ -310,3 +310,35 @@ describe('findTree across frameworks', () => {
     expect(api.findTree(button).map((item) => item.label)).toEqual(['<button>', 'Counter', 'Panel', 'index'])
   })
 })
+
+describe('Angular', () => {
+  afterEach(() => {
+    delete (window as unknown as { ng?: unknown }).ng
+  })
+
+  it('opens the component that owns the element, and lists component hosts above it', () => {
+    const component = (className: string, filePath: string, lineNumber: number) => {
+      const ctor = { name: `_${className}`, ɵcmp: { debugInfo: { className, filePath, lineNumber } } }
+      return { constructor: ctor }
+    }
+    document.body.innerHTML = '<app-root><main><app-panel><section><app-counter><button>b</button></app-counter></section></app-panel></main></app-root>'
+    const hosts = new Map<Element, unknown>([
+      [document.querySelector('app-counter')!, component('Counter', 'src/app/counter.ts', 7)],
+      [document.querySelector('app-panel')!, component('Panel', 'src/app/panel.ts', 7)],
+      [document.querySelector('app-root')!, component('App', 'src/app/app.ts', 18)],
+    ])
+    ;(window as unknown as { ng: unknown }).ng = {
+      getComponent: (element: Element) => hosts.get(element) ?? null,
+      getOwningComponent: () => hosts.get(document.querySelector('app-counter')!),
+    }
+    api = startClaudeLocator(options)
+    const button = document.querySelector('button') as Element
+    expect(api.findSource(button)).toEqual({ file: 'src/app/counter.ts', line: 7 })
+    expect(api.findTree(button).map((item) => `${item.label} ${item.source?.file}:${item.source?.line}`)).toEqual([
+      '<button> src/app/counter.ts:7',
+      'Counter src/app/counter.ts:7',
+      'Panel src/app/panel.ts:7',
+      'App src/app/app.ts:18',
+    ])
+  })
+})

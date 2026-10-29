@@ -66,6 +66,13 @@ export function startClaudeLocator(options: ClientOptions): ClientApi {
   type SvelteMeta = { loc?: { file?: string; line?: number; column?: number }; parent?: SvelteParent | null }
   // What Vue keeps on each element in dev: the component instance that rendered it
   type VueInstance = { type?: { __name?: string; name?: string; __file?: string }; parent?: VueInstance | null }
+  // Angular's dev-mode globals, and what it records on each component class
+  type AngularDebugInfo = { className?: string; filePath?: string; lineNumber?: number }
+  type AngularComponent = { constructor: { name?: string; ɵcmp?: { debugInfo?: AngularDebugInfo } } }
+  type AngularGlobals = {
+    getComponent?: (element: Element) => AngularComponent | null
+    getOwningComponent?: (element: Element) => AngularComponent | null
+  }
 
   const globalWindow = window as unknown as { __claudeLocator?: ClientApi }
   if (globalWindow.__claudeLocator) {
@@ -125,6 +132,24 @@ export function startClaudeLocator(options: ClientOptions): ClientApi {
       : undefined
   }
 
+  const angular = (): AngularGlobals | undefined => (window as unknown as { ng?: AngularGlobals }).ng
+
+  const angularInfo = (component: AngularComponent | null | undefined): { name: string; source?: Source } | undefined => {
+    if (!component) {
+      return undefined
+    }
+    const info = component.constructor.ɵcmp?.debugInfo
+    const name = info?.className || component.constructor.name?.replace(/^_/, '')
+    const source = info?.filePath && isProjectFile(info.filePath) ? { file: info.filePath, line: info.lineNumber } : undefined
+    return name ? { name, source } : undefined
+  }
+
+  // Angular has no position for template elements: the component that owns the element, where its class is
+  const sourceFromAngular = (element: Element): Source | undefined => {
+    const owning = angular()?.getOwningComponent
+    return owning ? angularInfo(owning(element))?.source : undefined
+  }
+
   // The attribute and Svelte's own record come first: they are taken from the file as written, while
   // `_debugSource` is computed after other transforms ran (@vitejs/plugin-react 4 prepends React Refresh code)
   const findSource = (start: Element): Source | undefined => {
@@ -140,7 +165,7 @@ export function startClaudeLocator(options: ClientOptions): ClientApi {
         return source
       }
     }
-    return undefined
+    return sourceFromAngular(start)
   }
 
   // A component fiber's type is its function or class, or the object `memo` / `forwardRef` returned
@@ -240,6 +265,23 @@ export function startClaudeLocator(options: ClientOptions): ClientApi {
     return true
   }
 
+  // Angular: each component host element above, with where its class is
+  const angularTree = (start: Element, items: TreeItem[]): boolean => {
+    const getComponent = angular()?.getComponent
+    if (!getComponent) {
+      return false
+    }
+    let found = false
+    for (let element: Element | null = start; element; element = element.parentElement) {
+      const info = angularInfo(getComponent(element))
+      if (info) {
+        pushItem(items, { label: info.name, source: info.source })
+        found = true
+      }
+    }
+    return found
+  }
+
   // Each file the elements above come from, innermost first: the whole tree for Solid, Preact or Astro, and what
   // lies outside a framework's own tree (an Astro page around a React island). Files already listed are skipped.
   const fileTree = (start: Element, items: TreeItem[]): void => {
@@ -261,8 +303,8 @@ export function startClaudeLocator(options: ClientOptions): ClientApi {
 
   const findTree = (start: Element): TreeItem[] => {
     const items: TreeItem[] = [{ label: `<${start.tagName.toLowerCase()}>`, source: findSource(start) }]
-    if (!reactTree(start, items) && !svelteTree(start, items)) {
-      vueTree(start, items)
+    if (!reactTree(start, items) && !svelteTree(start, items) && !vueTree(start, items)) {
+      angularTree(start, items)
     }
     fileTree(start, items)
     return items
@@ -348,7 +390,7 @@ export function startClaudeLocator(options: ClientOptions): ClientApi {
     const root = options.workspaceRoot.replace(/[\\/]+$/, '')
     const isAbsolute = /^([\\/]|[A-Za-z]:)/.test(source.file)
     const absolutePath = isAbsolute ? source.file : `${root}/${source.file}`
-    const relative = isAbsolute && source.file.startsWith(`${root}/`) ? source.file.slice(root.length + 1) : source.file
+    const relative = root && isAbsolute && source.file.startsWith(`${root}/`) ? source.file.slice(root.length + 1) : source.file
     return template
       .split('{path}').join(relative)
       .split('{absolutePath}').join(absolutePath)

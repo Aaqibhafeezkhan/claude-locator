@@ -77,12 +77,18 @@ claudeLocator({ open: ['claude', 'editor'], editor: 'cursor' })
 | Target | Opens in | Needs |
 | --- | --- | --- |
 | `'claude'` (default) | the Claude desktop app's Files pane | the Claude Code plugin above |
-| `'editor'` | your editor, through its command-line launcher, as Vite's own `/__open-in-editor` does ([`launch-editor`](https://github.com/vitejs/launch-editor)) | the launcher on `PATH`: `cursor`, `code`, `windsurf`, `zed`, `webstorm`, ... |
+| `'editor'` | your editor, through its command-line launcher | the launcher: `cursor`, `code`, `windsurf`, `zed`, `webstorm`, ... |
 | a function | wherever you send it | `(location) => void`, called on the dev server with `{ file, line, column, at }` |
 
-So in Cursor, Windsurf or VS Code with an agent, the agent's built-in browser can stay the browser and the file opens in the editor next to it. `editor` names the launcher; left out, `LAUNCH_EDITOR`, then `EDITOR`, then the editor that is running decides. Some installs put an agent CLI on `PATH` under the editor's name (Cursor's `~/.local/bin/cursor` shim runs the editor only when the IDE's own `cursor` is also on `PATH`); give the full path then, such as `/Applications/Cursor.app/Contents/Resources/app/bin/cursor`.
+So in Cursor, Windsurf or VS Code with an agent, the agent's built-in browser can stay the browser and the file opens in a tab of the same window. Give `editor` the launcher's name:
 
-Verified: the Claude desktop app. The `'editor'` target goes through the same `launch-editor` package Vite uses; with Cursor on macOS the launcher runs and Cursor starts, but the file showing in its window is not confirmed yet, and other editors have not been tried with this plugin.
+- **VS Code-family editors** (`cursor`, `code`, `windsurf`, `codium`, ...) are run directly with `-r -g <file>:<line>:<column>`, which opens the file in the window you used last: the one you are clicking in. `editorWindow: 'project'` runs `<workspace> -g <file>` instead, opening it in the window that has the workspace open, or in a new one. The launcher hands the file to the running app, so the tab shows a second or so after the click.
+- On **macOS**, `cursor`, `code` and `windsurf` run the launcher inside the installed app (`/Applications/Cursor.app/Contents/Resources/app/bin/cursor`, ...). The same name on `PATH` can be something else: Cursor's agent CLI installs a `~/.local/bin/cursor` shim that refuses to open files unless the IDE's own launcher is on `PATH` too.
+- **Other editors** go through [`launch-editor`](https://github.com/vitejs/launch-editor), as Vite's own `/__open-in-editor` does. With no `editor`, `LAUNCH_EDITOR`, then `EDITOR`, then the editor that is running decides.
+
+Each click is logged by the dev server, `[claude-locator] src/Counter.tsx:6 → claude, editor`, and a target that fails logs a warning.
+
+Verified: the Claude desktop app's Files pane, and Cursor's built-in browser opening the file in a tab of the same window (macOS). Other editors have not been tried with this plugin.
 
 ## How it works
 
@@ -120,6 +126,7 @@ Why the attribute comes first even on React 18: with `@vitejs/plugin-react` 4.x,
 claudeLocator({
   open: ['claude'],           // 'claude' | 'editor' | (location) => void, or a list of them
   editor: 'cursor',           // launcher for the 'editor' target; default LAUNCH_EDITOR, EDITOR, then a guess
+  editorWindow: 'reuse',      // VS Code family: 'reuse' (the window used last) | 'project' (the workspace's window)
   workspaceRoot: '/abs/path', // default: Vite's workspace root (monorepo root, else project root)
   signalFile: 'node_modules/.cache/claude-locator/open.json', // relative to workspaceRoot
   jsxSource: true,            // tag elements and components; React 19 needs it, React 18 falls back to _debugSource
@@ -150,6 +157,7 @@ claude plugin test plugin   # Claude Code plugin tests
 pnpm build          # the samples use the built package
 pnpm dev:react18     # sample app on http://localhost:5118
 pnpm dev:react19     # sample app on http://localhost:5119
+CLAUDE_LOCATOR_OPEN=claude,editor CLAUDE_LOCATOR_EDITOR=cursor pnpm dev:react19   # also open in Cursor
 ```
 
 To try the Claude Code plugin from this folder without installing it, start a session with `claude --plugin-dir ./plugin`.

@@ -77,6 +77,8 @@ export interface OpenHandlerOptions {
   workspaceRoot: string
   openers: Opener[]
   now?: () => number
+  /** Called for each location handed to the targets. */
+  onOpen?: (signal: OpenSignal) => void
   onError?: (error: unknown) => void
 }
 
@@ -86,7 +88,7 @@ type Next = (error?: unknown) => void
  * Connect middleware for `<base>/__claude-open?file=<path>&line=<n>&column=<n>`.
  * 204 when at least one target took it, 500 when all failed, 400 for a file outside the workspace, 403 for a cross-site request.
  */
-export const createOpenHandler = ({ workspaceRoot, openers, now = Date.now, onError }: OpenHandlerOptions) =>
+export const createOpenHandler = ({ workspaceRoot, openers, now = Date.now, onOpen, onError }: OpenHandlerOptions) =>
   async (req: IncomingMessage, res: ServerResponse, next: Next): Promise<void> => {
     const url = new URL(req.url ?? '/', 'http://localhost')
     if (!url.pathname.endsWith(`/${ENDPOINT}`)) {
@@ -119,6 +121,7 @@ export const createOpenHandler = ({ workspaceRoot, openers, now = Date.now, onEr
       column: positiveInt(url.searchParams.get('column')),
       at: now(),
     }
+    onOpen?.(signal)
     // Each target on its own: an editor that is not installed does not keep the Claude pane from opening
     const results = await Promise.allSettled(openers.map(async (opener) => opener(signal)))
     const failures = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected')

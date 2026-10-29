@@ -2,7 +2,7 @@ import path from 'node:path'
 import { searchForWorkspaceRoot, type HtmlTagDescriptor, type Plugin } from 'vite'
 import { startClaudeLocator, type ClientOptions } from './client'
 import { patchReactDevtoolsHook } from './devtools-hook'
-import { editorOpener } from './editor'
+import { editorOpener, type EditorWindow } from './editor'
 import { claudeOpener, createOpenHandler, DEFAULT_SIGNAL_FILE, ENDPOINT, type Opener, type OpenSignal } from './server'
 import { addSourceAttributes, COMPONENT_SOURCE_PROPERTY, shouldTransform, SOURCE_ATTRIBUTE } from './transform'
 
@@ -25,6 +25,12 @@ export interface ClaudeLocatorOptions {
    * Default: `LAUNCH_EDITOR`, then `EDITOR`, then the editor that is running.
    */
   editor?: string
+  /**
+   * Which window of a VS Code-family editor (Cursor, VS Code, Windsurf, ...) gets the file:
+   * `'reuse'`, the one you used last, which is the one you are clicking in when its built-in browser shows the app;
+   * `'project'`, the one that has the workspace open, opening it if needed. Default: `'reuse'`.
+   */
+  editorWindow?: EditorWindow
   /**
    * Files outside this folder are refused, and the signal file is written under it.
    * Default: Vite's workspace root (the monorepo root when there is one, else the project root).
@@ -85,14 +91,21 @@ export default function claudeLocator(options: ClaudeLocatorOptions = {}): Plugi
         target === 'claude'
           ? claudeOpener(path.resolve(workspaceRoot, signalFile))
           : target === 'editor'
-            ? editorOpener(options.editor)
+            ? editorOpener(options.editor, { workspaceRoot, window: options.editorWindow })
             : target,
       )
+      const targetNames = targets.map((target) => (typeof target === 'string' ? target : 'function')).join(', ')
+      const { logger } = server.config
       server.middlewares.use(
         createOpenHandler({
           workspaceRoot,
           openers,
-          onError: (error) => server.config.logger.warn(`[claude-locator] ${String(error)}`, { timestamp: true }),
+          onOpen: (signal) =>
+            logger.info(
+              `[claude-locator] ${path.relative(workspaceRoot, signal.file)}:${signal.line ?? 1} → ${targetNames}`,
+              { timestamp: true },
+            ),
+          onError: (error) => logger.warn(`[claude-locator] ${String(error)}`, { timestamp: true }),
         }),
       )
     },

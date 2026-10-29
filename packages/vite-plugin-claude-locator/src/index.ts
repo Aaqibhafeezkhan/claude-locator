@@ -1,12 +1,14 @@
+import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { searchForWorkspaceRoot, type HtmlTagDescriptor, type Plugin } from 'vite'
 import { startClaudeLocator, type ClientOptions } from './client'
 import { patchReactDevtoolsHook } from './devtools-hook'
 import { editorOpener, type EditorWindow } from './editor'
 import { DEFAULT_LOCATION_FORMAT, DEFAULT_OPENCODE_URL, opencodeOpener } from './opencode'
 import { claudeOpener, createOpenHandler, DEFAULT_SIGNAL_FILE, ENDPOINT, type Opener, type OpenSignal } from './server'
-import { addVueSourceAttributes, type VueCompiler } from './templates'
+import { addAstroSourceAttributes, addVueSourceAttributes, type AstroCompiler, type VueCompiler } from './templates'
 import { addSourceAttributes, COMPONENT_SOURCE_PROPERTY, shouldTransform, SOURCE_ATTRIBUTE } from './transform'
 
 export type { OpenSignal }
@@ -66,7 +68,16 @@ export interface ClaudeLocatorOptions {
    * (LocatorJS) that rely on it. claude-locator does not need it. Default: false.
    */
   patchDevtoolsHook?: boolean
+  /**
+   * Add the page script to `index.html`. Turn it off where the framework renders its own HTML (Astro, SSR) and
+   * import `virtual:claude-locator/client` from a page script instead; the Astro integration does that. Default: true.
+   */
+  injectClient?: boolean
 }
+
+/** Import this from a page script where there is no `index.html` to inject into. */
+export const CLIENT_MODULE_ID = 'virtual:claude-locator/client'
+const RESOLVED_CLIENT_MODULE_ID = `\0${CLIENT_MODULE_ID}`
 
 const inlineCall = (fn: (...args: never[]) => unknown, ...args: unknown[]): string =>
   `(${fn.toString()})(${args.map((arg) => JSON.stringify(arg)).join(',')});`
@@ -84,6 +95,24 @@ const loadVueCompiler = (projectRoot: string): VueCompiler | undefined => {
   return undefined
 }
 
+// Astro's own compiler, from the copy of astro the project installed
+const loadAstroCompiler = async (projectRoot: string): Promise<AstroCompiler | undefined> => {
+  try {
+    const astroPackage = fs.realpathSync(createRequire(path.join(projectRoot, 'package.json')).resolve('astro/package.json'))
+    const require = createRequire(astroPackage)
+    for (const name of ['@astrojs/compiler-rs', '@astrojs/compiler']) {
+      try {
+        return (await import(pathToFileURL(require.resolve(name)).href)) as AstroCompiler
+      } catch {
+        // this Astro uses the other one
+      }
+    }
+  } catch {
+    // no astro here
+  }
+  return undefined
+}
+
 const isExcluded = (id: string, exclude: (RegExp | string)[]): boolean =>
   exclude.some((pattern) => (typeof pattern === 'string' ? id.includes(pattern) : pattern.test(id)))
 
@@ -94,6 +123,7 @@ export default function claudeLocator(options: ClaudeLocatorOptions = {}): Plugi
     exclude = [],
     modifier = 'alt',
     patchDevtoolsHook = false,
+    injectClient = true,
     signalFile = DEFAULT_SIGNAL_FILE,
   } = options
   const targets = ([] as OpenTarget[]).concat(options.open ?? 'claude')
@@ -101,6 +131,21 @@ export default function claudeLocator(options: ClaudeLocatorOptions = {}): Plugi
   let projectRoot = ''
   let base = '/'
   let vueCompiler: VueCompiler | null | undefined
+  let astroCompiler: Promise<AstroCompiler | undefined> | undefined
+
+  const clientCode = (): string => {
+    const hasServerTarget = targets.some((target) => target !== 'clipboard')
+    const clientOptions: ClientOptions = {
+      endpoint: hasServerTarget ? `${base.replace(/\/?$/, '/')}${ENDPOINT}` : null,
+      copyFormat: targets.includes('clipboard') ? (options.locationFormat ?? DEFAULT_LOCATION_FORMAT) : null,
+      workspaceRoot,
+      projectRoot,
+      modifier: `${modifier}Key`,
+      attribute: SOURCE_ATTRIBUTE,
+      componentProperty: COMPONENT_SOURCE_PROPERTY,
+    }
+    return inlineCall(startClaudeLocator, clientOptions)
+  }
 
   return {
     name: 'claude-locator',
@@ -149,9 +194,14 @@ export default function claudeLocator(options: ClaudeLocatorOptions = {}): Plugi
       // Ahead of @vitejs/plugin-react's own `enforce: 'pre'` transform, which prepends
       // React Refresh code and would shift every line number
       order: 'pre',
-      handler(code, id) {
+      async handler(code, id) {
         if (!jsxSource || isExcluded(id, exclude)) {
           return null
+        }
+        if (/\.astro$/.test(id) && !id.includes('/node_modules/')) {
+          astroCompiler ??= loadAstroCompiler(projectRoot)
+          const compiler = await astroCompiler
+          return compiler ? addAstroSourceAttributes(code, id, workspaceRoot, compiler) : null
         }
         // The SFC itself; its compiled parts come back as `App.vue?vue&type=...` and are left alone
         if (/\.vue$/.test(id) && !id.includes('/node_modules/')) {
@@ -164,20 +214,16 @@ export default function claudeLocator(options: ClaudeLocatorOptions = {}): Plugi
       },
     },
 
+    resolveId(id) {
+      return id === CLIENT_MODULE_ID ? RESOLVED_CLIENT_MODULE_ID : null
+    },
+
+    load(id) {
+      return id === RESOLVED_CLIENT_MODULE_ID ? clientCode() : null
+    },
+
     transformIndexHtml() {
-      const hasServerTarget = targets.some((target) => target !== 'clipboard')
-      const clientOptions: ClientOptions = {
-        endpoint: hasServerTarget ? `${base.replace(/\/?$/, '/')}${ENDPOINT}` : null,
-        copyFormat: targets.includes('clipboard') ? (options.locationFormat ?? DEFAULT_LOCATION_FORMAT) : null,
-        workspaceRoot,
-        projectRoot,
-        modifier: `${modifier}Key`,
-        attribute: SOURCE_ATTRIBUTE,
-        componentProperty: COMPONENT_SOURCE_PROPERTY,
-      }
-      const tags: HtmlTagDescriptor[] = [
-        { tag: 'script', children: inlineCall(startClaudeLocator, clientOptions), injectTo: 'body' },
-      ]
+      const tags: HtmlTagDescriptor[] = injectClient ? [{ tag: 'script', children: clientCode(), injectTo: 'body' }] : []
       if (patchDevtoolsHook) {
         // Before every module script, so before react-dom registers its renderer
         tags.unshift({ tag: 'script', children: inlineCall(patchReactDevtoolsHook), injectTo: 'head-prepend' })

@@ -16,7 +16,15 @@
     "claude",
     "claude-code",
     "locator",
-    "click-to-source"
+    "click-to-source",
+    "vue",
+    "svelte",
+    "solid",
+    "preact",
+    "astro",
+    "codex",
+    "opencode",
+    "cursor"
   ],
   "type": "module",
   "main": "./dist/index.cjs",
@@ -26,6 +34,10 @@
     ".": {
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./astro": {
+      "import": "./dist/astro.js",
+      "require": "./dist/astro.cjs"
     }
   },
   "files": [

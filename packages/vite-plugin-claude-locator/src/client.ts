@@ -240,23 +240,31 @@ export function startClaudeLocator(options: ClientOptions): ClientApi {
     return true
   }
 
-  // Any other framework (Solid, Preact, Astro, ...): each file the elements above come from, innermost first
+  // Each file the elements above come from, innermost first: the whole tree for Solid, Preact or Astro, and what
+  // lies outside a framework's own tree (an Astro page around a React island). Files already listed are skipped.
   const fileTree = (start: Element, items: TreeItem[]): void => {
+    const isListed = (file: string): boolean => items.slice(1).some((item) => item.source && sameFile(item.source.file, file))
     let currentFile: string | undefined
     for (let element: Element | null = start; element; element = element.parentElement) {
       const source = sourceFromAttribute(element)
       if (source && source.file !== currentFile) {
         currentFile = source.file
-        pushItem(items, { label: baseName(source.file), source })
+        if (!isListed(source.file)) {
+          pushItem(items, { label: baseName(source.file), source })
+        }
       }
     }
   }
 
+  // The attribute's paths are workspace-relative, the frameworks' often absolute
+  const sameFile = (a: string, b: string): boolean => a === b || a.endsWith(`/${b}`) || b.endsWith(`/${a}`)
+
   const findTree = (start: Element): TreeItem[] => {
     const items: TreeItem[] = [{ label: `<${start.tagName.toLowerCase()}>`, source: findSource(start) }]
-    if (!reactTree(start, items) && !svelteTree(start, items) && !vueTree(start, items)) {
-      fileTree(start, items)
+    if (!reactTree(start, items) && !svelteTree(start, items)) {
+      vueTree(start, items)
     }
+    fileTree(start, items)
     return items
   }
 

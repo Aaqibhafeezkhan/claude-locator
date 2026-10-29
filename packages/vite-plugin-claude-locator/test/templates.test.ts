@@ -36,3 +36,62 @@ describe('addVueSourceAttributes', () => {
     expect(addVueSourceAttributes('<template><div></template>', '/repo/src/A.vue', '/repo', compiler)).toBeNull()
   })
 })
+
+import fs from 'node:fs'
+import { pathToFileURL } from 'node:url'
+import { addAstroSourceAttributes, type AstroCompiler } from '../src/templates'
+
+const astroPage = [
+  '---',
+  "import Panel from '../components/Panel.astro'",
+  '---',
+  '<html><head><title>a · b</title></head>',
+  '  <body>',
+  '    <main class="x"><Panel><p>hi</p></Panel></main>',
+  '  </body>',
+  '</html>',
+].join('\n')
+
+describe('addAstroSourceAttributes', () => {
+  it('tags plain elements from Astro 7 compiler-rs, skipping the page shell and components', async () => {
+    const astroPackage = fs.realpathSync(path.resolve(__dirname, '../../../examples/astro/node_modules/astro/package.json'))
+    const compiler = (await import(
+      pathToFileURL(createRequire(astroPackage).resolve('@astrojs/compiler-rs')).href
+    )) as AstroCompiler
+    const output = (await addAstroSourceAttributes(astroPage, '/repo/src/pages/index.astro', '/repo', compiler))!.code
+    expect(output).toContain('<body data-claude-source="src/pages/index.astro:5:3">')
+    expect(output).toContain('<main data-claude-source="src/pages/index.astro:6:5" class="x">')
+    expect(output).toContain('<p data-claude-source="src/pages/index.astro:6:28">hi</p>')
+    expect(output).toContain('<html><head><title>a · b</title></head>')
+    expect(output).toContain('<Panel>')
+  })
+
+  it('reads the Go compiler’s element nodes by line and column', async () => {
+    const compiler: AstroCompiler = {
+      parse: async () => ({
+        ast: {
+          type: 'root',
+          children: [
+            { type: 'element', name: 'title', position: { start: { line: 4, column: 13 } } },
+            { type: 'element', name: 'main', position: { start: { line: 6, column: 5 } } },
+            { type: 'component', name: 'Panel', position: { start: { line: 6, column: 22 } } },
+          ],
+        },
+      }),
+    }
+    const output = (await addAstroSourceAttributes(astroPage, '/repo/src/pages/index.astro', '/repo', compiler))!.code
+    expect(output).toContain('<main data-claude-source="src/pages/index.astro:6:5" class="x">')
+    expect(output).toContain('<title>a · b</title>')
+  })
+
+  it('converts byte offsets after multi-byte characters', async () => {
+    const code = '<h1>a · b</h1>\n<p>x</p>'
+    const byteOffset = Buffer.from(code).indexOf('<p>')
+    const compiler: AstroCompiler = {
+      parse: () => ({ ast: { body: [{ type: 'JSXOpeningElement', start: byteOffset, name: { type: 'JSXIdentifier', name: 'p' } }] } }),
+    }
+    expect((await addAstroSourceAttributes(code, '/repo/a.astro', '/repo', compiler))!.code).toContain(
+      '<p data-claude-source="a.astro:2:1">x</p>',
+    )
+  })
+})

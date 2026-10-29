@@ -298,3 +298,15 @@ describe('findTree beyond React', () => {
     ])
   })
 })
+
+describe('findTree across frameworks', () => {
+  it('adds the files around a React island (an Astro page) after the React components', () => {
+    api = startClaudeLocator(options)
+    document.body.innerHTML =
+      '<main data-claude-source="src/pages/index.astro:9:5"><section data-claude-source="src/components/Panel.astro:1:1">' +
+      '<button data-claude-source="src/components/Counter.jsx:6:5">b</button></section></main>'
+    const button = document.querySelector('button') as Element
+    attachFiber(button, { type: 'button', return: { type: component('Counter', 'src/components/Counter.jsx:3:1'), return: null } })
+    expect(api.findTree(button).map((item) => item.label)).toEqual(['<button>', 'Counter', 'Panel', 'index'])
+  })
+})

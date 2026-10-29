@@ -1,0 +1,17 @@
+---
+import Panel from '../components/Panel.astro'
+import { Counter } from '../components/Counter.jsx'
+---
+
+<html lang="en">
+  <head><meta charset="UTF-8" /><title>claude-locator · Astro</title></head>
+  <body>
+    <main style="font-family: system-ui; padding: 24px">
+      <h1>claude-locator · Astro</h1>
+      <p>Hold Option (Alt) and click anything to open its source. Option+right-click shows the component tree.</p>
+      <Panel>
+        <Counter client:load />
+      </Panel>
+    </main>
+  </body>
+</html>

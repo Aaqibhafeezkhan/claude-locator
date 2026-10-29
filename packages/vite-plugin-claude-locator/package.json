@@ -1,0 +1,54 @@
+{
+  "name": "vite-plugin-claude-locator",
+  "version": "0.1.0",
+  "description": "Option+click a React element in your Vite dev server to open its source in the Claude desktop app's Files pane.",
+  "license": "MIT",
+  "author": "scs0209",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/scs0209/claude-locator.git",
+    "directory": "packages/vite-plugin-claude-locator"
+  },
+  "homepage": "https://github.com/scs0209/claude-locator#readme",
+  "keywords": [
+    "vite-plugin",
+    "react",
+    "claude",
+    "claude-code",
+    "locator",
+    "click-to-source"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "vite": ">=5"
+  },
+  "dependencies": {
+    "@babel/parser": "^7.26.0",
+    "magic-string": "^0.30.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "happy-dom": "^15.0.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.0",
+    "vite": "^6.0.0",
+    "vitest": "^2.1.0"
+  }
+}

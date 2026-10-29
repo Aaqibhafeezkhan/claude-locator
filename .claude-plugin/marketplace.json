@@ -1,0 +1,12 @@
+{
+  "name": "claude-locator",
+  "owner": { "name": "scs0209" },
+  "description": "Click-to-source for React apps in the Claude desktop app",
+  "plugins": [
+    {
+      "name": "claude-locator",
+      "source": "./plugin",
+      "description": "Opens the React source you Option+click in your Vite dev server in the Claude desktop app's Files pane"
+    }
+  ]
+}

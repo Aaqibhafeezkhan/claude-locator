@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+.claude-plugin/types/
+plugin/.claude-plugin/types/
+.pnpm-store/
+.claude/

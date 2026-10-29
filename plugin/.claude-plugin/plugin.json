@@ -1,0 +1,8 @@
+{
+  "name": "claude-locator",
+  "version": "0.1.0",
+  "description": "Opens the React source you Option+click in your Vite dev server in the Claude desktop app's Files pane",
+  "author": { "name": "scs0209" },
+  "homepage": "https://github.com/scs0209/claude-locator",
+  "license": "MIT"
+}

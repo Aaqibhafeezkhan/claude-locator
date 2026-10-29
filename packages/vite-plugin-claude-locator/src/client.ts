@@ -381,7 +381,10 @@ export function startClaudeLocator(options: ClientOptions): ClientApi {
     label.textContent = text
     flashUntil = Date.now() + 1200
     setTimeout(() => {
-      if (!hovered) {
+      // Back to what is under the pointer now, or nothing
+      if (hovered) {
+        show(hovered)
+      } else {
         box.style.display = 'none'
       }
     }, 1200)

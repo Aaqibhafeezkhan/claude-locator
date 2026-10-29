@@ -1,19 +1,31 @@
+<div align="center">
+
 # claude-locator
 
-Hold <kbd>Option</kbd> (<kbd>Alt</kbd>) and click any element of your React app in the Vite dev server: the Claude desktop app opens the file and line that rendered it in its side **Files** pane, next to your Claude Code session. <kbd>Option</kbd>+right-click lists the components above it, to open any of them.
+**Hold <kbd>⌥ Option</kbd> and click anything in your running app. Land on the line that drew it — in Claude, Cursor, VS Code, OpenCode or Codex.**
 
-It works in any browser, including the built-in browsers of coding agents, which have no React DevTools extension and often do not hand `cursor://` / `vscode://` links to your editor: the dev server opens the file, not the browser. Besides the Claude desktop app it can open your editor (Cursor, VS Code, Windsurf, Zed, WebStorm, ...), copy the location for any agent's prompt (Codex, OpenCode, ...), type it into a running OpenCode TUI, or call a function of yours.
+[![npm](https://img.shields.io/npm/v/vite-plugin-claude-locator?color=d97757)](https://www.npmjs.com/package/vite-plugin-claude-locator)
+[![CI](https://github.com/scs0209/claude-locator/actions/workflows/ci.yml/badge.svg)](https://github.com/scs0209/claude-locator/actions/workflows/ci.yml)
+[![license](https://img.shields.io/github/license/scs0209/claude-locator)](LICENSE)
 
-For the Claude desktop app it has two parts, and you need both:
+[**Try the demo →**](https://scs0209.github.io/claude-locator/) · [Install](#install) · [Frameworks](#frameworks) · [Where it opens](#where-it-opens) · [How it works](#how-it-works)
 
-| Part | Where it runs | What it does |
-| --- | --- | --- |
-| [`vite-plugin-claude-locator`](packages/vite-plugin-claude-locator) | your Vite dev server and the page | finds the source of the clicked element and writes it to a small signal file |
-| [`claude-locator` plugin](plugin) | Claude Code, in the desktop app | watches that file and opens the source in the session's Files pane |
+<img src="docs/demo.gif" alt="Option+hover outlines an element with its file and line; Option+click opens it; Option+right-click lists the components above it" width="880" />
+
+</div>
+
+## Why
+
+You see the bug on the page; your agent needs the file. claude-locator turns "the price on the second card" into `src/components/ProductCard.tsx:12`, opened where you and your agent work — without the React DevTools extension, and inside the built-in browsers of coding agents, which do not hand `vscode://` or `cursor://` links to your editor.
+
+- **⌥ + hover** outlines the element, with its component and `file:line`
+- **⌥ + click** opens that line
+- **⌥ + right-click** lists the element and every component above it; open any of them
+- **React, Vue, Svelte, Solid, Preact, Astro and Angular** (React 18 and 19, Astro 5 and 7)
+- **Opens in** the Claude desktop app's Files pane, your editor, OpenCode's prompt, the clipboard (Codex and any agent), a URL or a function of yours
+- **Development only.** Nothing ships in `vite build`, and the click never reaches your app
 
 ## Install
-
-### 1. The Vite plugin
 
 ```bash
 npm install -D vite-plugin-claude-locator
@@ -30,17 +42,16 @@ export default defineConfig({
 })
 ```
 
-It only runs under `vite` / `vite dev` (`apply: 'serve'`); production builds are untouched.
-
-### 2. The Claude Code plugin
-
-At the prompt of a Claude Code terminal session:
+Then pick [where it opens](#where-it-opens). The default, `'claude'`, also needs the Claude Code plugin:
 
 ```
 /plugin install claude-locator --marketplace scs0209/claude-locator
 ```
 
-Answer `y` to add the marketplace, then pick a scope (user scope makes it load in every session, desktop app sessions included).
+<details>
+<summary>Other ways to install the Claude Code plugin</summary>
+
+At the prompt of a Claude Code terminal session, the line above; answer `y` to add the marketplace and pick a scope (the user scope loads it in every session, the desktop app's included).
 
 From a shell:
 
@@ -50,130 +61,163 @@ claude plugin install claude-locator --marketplace scs0209/claude-locator
 
 In the desktop app, where `/plugin` does not run: click **+** next to the prompt box, then **Plugins**, **Add marketplace** with `scs0209/claude-locator`, then **Add plugin**.
 
-## Use
+</details>
 
-1. Open a Claude Code session in the desktop app on your project folder (or a folder above it, such as a monorepo root).
-2. Start the dev server and open the page, in the app's built-in browser or any other browser.
-3. Hold <kbd>Option</kbd>: hovered elements get an outline and a label with the component and the source. Click: the Files pane opens at that line.
-4. <kbd>Option</kbd>+right-click: a menu lists the element and every component above it, each with the file and line where it is defined. Click a row to open it; rows from `node_modules` are greyed out.
+## Frameworks
 
+| Framework | Setup | Element → line | Component tree |
+| --- | --- | --- | --- |
+| **React** 18 · 19 | Vite plugin | ✅ JSX transform | ✅ fiber chain, with where each component is defined |
+| **Vue** 3 | Vite plugin | ✅ `.vue` template transform | ✅ component instances, with their files |
+| **Svelte** 5 | Vite plugin | ✅ Svelte's own dev records | ✅ each component usage |
+| **Solid** · **Preact** | Vite plugin | ✅ JSX transform | ✅ by file |
+| **Astro** 5 · 7 | `vite-plugin-claude-locator/astro` | ✅ `.astro` template transform, and the islands | ✅ islands, then the `.astro` files around them |
+| **Angular** 20 | standalone server + page script | ✅ the owning component's class | ✅ component hosts |
+| Anything else (webpack, Next.js, …) | standalone server + page script | elements tagged by your build, or nothing | by file |
+
+<details>
+<summary><b>Astro</b></summary>
+
+```js
+// astro.config.mjs
+import { defineConfig } from 'astro/config'
+import claudeLocator from 'vite-plugin-claude-locator/astro'
+
+export default defineConfig({
+  integrations: [claudeLocator()],
+})
 ```
-<button>   src/Counter.tsx:6
-Counter    src/Counter.tsx:3
-Panel      src/Panel.tsx:3
-App        src/App.tsx:4
+
+The integration adds the Vite plugin in `astro dev` only and injects the page script. Astro 7 runs `astro dev` in the background: after changing the config, `astro dev stop` before starting again.
+
+</details>
+
+<details>
+<summary><b>Angular</b>, and other dev servers that take no Vite plugin</summary>
+
+The Angular CLI dev server takes no Vite plugins, so the endpoint runs on its own port and the page script is loaded from your code:
+
+```bash
+npx claude-locator              # http://127.0.0.1:5678, beside `ng serve`
 ```
 
-The click never reaches your app (and <kbd>Option</kbd>+click on a link does not download it).
+```ts
+// main.ts
+import { isDevMode } from '@angular/core'
 
-## Other coding agents and editors
+if (isDevMode()) {
+  import('vite-plugin-claude-locator/client').then((m) => m.startClaudeLocator())
+}
+```
 
-What decides where a click opens is the `open` option, not the browser:
+Angular in development records each component class's file and line (`ɵcmp.debugInfo`); a click opens the class of the component that owns the element. Template lines are not recorded.
+
+`npx claude-locator --help` lists the options (`--open claude,editor,opencode`, `--editor cursor`, `--root`, `--port`). It answers pages served from this machine only (`localhost`, `127.0.0.1`).
+
+</details>
+
+## Where it opens
 
 ```ts
 claudeLocator({ open: ['claude', 'editor'], editor: 'cursor' })
 ```
 
-| Target | Opens in | Needs |
+| `open` | Opens in | Needs |
 | --- | --- | --- |
-| `'claude'` (default) | the Claude desktop app's Files pane | the Claude Code plugin above |
-| `'editor'` | your editor, through its command-line launcher | the launcher: `cursor`, `code`, `windsurf`, `zed`, `webstorm`, ... |
-| `'clipboard'` | the clipboard, as `src/Counter.tsx:6`, to paste into any agent's prompt | nothing; written by the page, in the click |
-| `'opencode'` | the prompt of a running OpenCode TUI, as `src/Counter.tsx:6 ` | the TUI started with a known port: `opencode --port 4096` |
-| a function | wherever you send it | `(location) => void`, called on the dev server with `{ file, line, column, at }` |
+| `'claude'` *(default)* | the Claude desktop app's **Files pane**, next to your session | the Claude Code plugin |
+| `'editor'` | **Cursor, VS Code, Windsurf**: a tab in the window you are using. **Zed, WebStorm**, …: through their launcher | `editor: 'cursor'` (or `code`, `zed`, …) |
+| `'opencode'` | the **OpenCode** TUI's prompt, as `src/Counter.tsx:6` | `opencode --port 4096` |
+| `'clipboard'` | the clipboard, to paste into **Codex** or any agent | — |
+| `{ url }` | a URL the page opens: `vscode://file/{absolutePath}:{line}`, a GitHub link, … | — |
+| a function | anything: `(location) => { … }` on the dev server | — |
 
-So in Cursor, Windsurf or VS Code with an agent, the agent's built-in browser can stay the browser and the file opens in a tab of the same window. Give `editor` the launcher's name:
+Use several at once. Each click is logged by the dev server (`[claude-locator] src/Counter.tsx:6 → claude, editor`); a target that fails logs a warning and does not stop the others.
 
-- **VS Code-family editors** (`cursor`, `code`, `windsurf`, `codium`, ...) are run directly with `-r -g <file>:<line>:<column>`, which opens the file in the window you used last: the one you are clicking in. `editorWindow: 'project'` runs `<workspace> -g <file>` instead, opening it in the window that has the workspace open, or in a new one. The launcher hands the file to the running app, so the tab shows a second or so after the click.
-- On **macOS**, `cursor`, `code` and `windsurf` run the launcher inside the installed app (`/Applications/Cursor.app/Contents/Resources/app/bin/cursor`, ...). The same name on `PATH` can be something else: Cursor's agent CLI installs a `~/.local/bin/cursor` shim that refuses to open files unless the IDE's own launcher is on `PATH` too.
-- **Other editors** go through [`launch-editor`](https://github.com/vitejs/launch-editor), as Vite's own `/__open-in-editor` does. With no `editor`, `LAUNCH_EDITOR`, then `EDITOR`, then the editor that is running decides.
+<details>
+<summary>Details per target</summary>
 
-**Codex, OpenCode and other agents.** The Codex app and the OpenCode desktop app have no public way, as of this writing, for another program to show a file in their own panes (the Codex app's `codex://` links open Settings; OpenCode desktop's `opencode://` links open a project or a new session). So for them the location goes where you talk to the agent:
+- **Claude desktop.** The page posts the location to the dev server, which writes `node_modules/.cache/claude-locator/open.json` at the workspace root; the Claude Code plugin watches that file and calls the app's `show_pane`. The file must be inside the session's folder.
+- **Cursor, VS Code, Windsurf.** Run directly with `-r -g <file>:<line>:<column>`: the file opens in the window you used last, which is the one you are clicking in when its built-in browser shows your app. The tab shows a second or so after the click. `editorWindow: 'project'` opens the workspace's window instead. On macOS the launcher inside the installed app is preferred: the same name on `PATH` can be an agent CLI (Cursor's agent installs a `~/.local/bin/cursor` shim that does not open files).
+- **Other editors** go through [`launch-editor`](https://github.com/vitejs/launch-editor), as Vite's own `/__open-in-editor` does. Without `editor`: `LAUNCH_EDITOR`, then `EDITOR`, then the running editor decides.
+- **OpenCode.** `POST /tui/append-prompt` on the OpenCode server (`opencodeUrl`, default `http://127.0.0.1:4096`). The TUI picks a random port unless started with `--port`. The OpenCode desktop app does not act on that call.
+- **Codex, and agents without an API for it.** Neither the Codex app nor the OpenCode desktop app offers, as of this writing, a way for another program to show a file in their panes (the Codex app's `codex://` links open Settings; OpenCode desktop's `opencode://` links open a project or a session). Use `'clipboard'` and paste, plus `'editor'` to read the file.
+- **Format.** `locationFormat` sets what `'clipboard'` and `'opencode'` write: `{path}` (relative to the workspace), `{absolutePath}`, `{line}`, `{column}`. Default `{path}:{line}`; e.g. `'@{path}#L{line}'`.
+- **In the page.** Each opened location is also dispatched on `window` as `claude-locator:open` (`event.detail` is `{ file, line, column }`).
 
-```ts
-claudeLocator({ open: ['clipboard', 'editor'], editor: 'cursor' }) // Codex app: paste into the composer, read in Cursor
-claudeLocator({ open: ['opencode', 'editor'], editor: 'zed' })     // OpenCode TUI: typed into its prompt
-```
+Verified on macOS: the Claude desktop app's Files pane; Cursor's built-in browser opening a tab in the same window; the clipboard; the OpenCode TUI prompt (OpenCode 1.18). Other editors and the Codex app have not been tried with this plugin.
 
-`'opencode'` calls `POST /tui/append-prompt` on the OpenCode server, `http://127.0.0.1:4096` unless `opencodeUrl` says otherwise; the TUI listens on a random port unless started with `--port`. The OpenCode desktop app does not act on that call. `locationFormat` changes what is written: `{path}` (relative to the workspace), `{absolutePath}`, `{line}`, `{column}`, e.g. `'@{path}#L{line}'`.
-
-Each click is logged by the dev server, `[claude-locator] src/Counter.tsx:6 → claude, editor`, and a target that fails logs a warning.
-
-Verified (macOS): the Claude desktop app's Files pane; Cursor's built-in browser opening the file in a tab of the same window; the clipboard; the location typed into the OpenCode TUI prompt (OpenCode 1.18). Other editors, and the Codex app, have not been tried with this plugin.
+</details>
 
 ## How it works
 
 ```
- browser                         Vite dev server                       Claude Code (desktop app)
- ───────                         ───────────────                       ─────────────────────────
- Option+click <button>
-   │ find source:
-   │  data-claude-source (added at transform time)
-   │  else fiber._debugSource (React 18)
-   │ Option+right-click: the tree from
-   │  fiber.return + __claudeSource
+ page                                dev server (or `npx claude-locator`)        where you work
+ ────                                ────────────────────────────────────        ──────────────
+ ⌥ + click <button>
+   │ the source, nearest first:
+   │   data-claude-source  ← added at transform time (JSX, .vue, .astro)
+   │   __svelte_meta       ← Svelte dev mode
+   │   fiber._debugSource  ← React 18, when nothing else is there
+   │   ng debugInfo        ← Angular dev mode
    │
-   └─ POST <base>/__claude-open ──▶ check file is inside the workspace
-        ?file=src/App.tsx&line=12   write node_modules/.cache/
-                                      claude-locator/open.json ──────▶ plugin polls the file (400 ms)
-                                      { file, line, column, at }        new `at` → ccd_view.show_pane
-                                                                          { pane: 'file', path, line }
+   ├─ clipboard, { url } targets: done in the page
+   └─ POST /__claude-open ──────────▶ inside the workspace? exists?
+        ?file=src/App.tsx&line=12     ├─ 'claude'   → open.json ──────────────▶ Claude Code plugin → Files pane
+                                      ├─ 'editor'   → cursor -r -g file:line ─▶ Cursor / VS Code / Zed …
+                                      └─ 'opencode' → /tui/append-prompt ─────▶ OpenCode TUI prompt
 ```
 
-**Finding the source.** On a click the page walks up from the clicked DOM node:
+<details>
+<summary>More on finding the source</summary>
 
-1. **`data-claude-source`** (React 18 and 19) — the plugin adds `data-claude-source="<path>:<line>:<column>"` to every host JSX element (`<div>`, `<button>`, …) in your project files at transform time, with `@babel/parser` and `magic-string`, ahead of `@vitejs/plugin-react` or `plugin-react-swc`, so the position is the one in the file as you wrote it. The nearest element that has it wins. Components (`<Button>`) are not tagged, since they may not pass unknown props to the DOM, so a click inside a library component opens the nearest host element of yours around it.
-2. **Fiber `_debugSource`** (React 18 and older), when no element up the tree has the attribute (`jsxSource: false`, or files the transform skipped). The plugin reads the fiber straight off the DOM node (`__reactFiber$…`), so it does not need the React DevTools hook. When the element comes from `node_modules`, it follows `_debugOwner` up to the component in your code that rendered it. React 19 removed `_debugSource`, so there this step finds nothing.
+- **Elements.** At transform time, before `@vitejs/plugin-react`, `plugin-vue` or Astro's compiler see the file, every plain element (`<div>`, `<button>`) gets `data-claude-source="<path>:<line>:<column>"` — positions from the file as you wrote it. JSX is parsed with `@babel/parser`; `.vue` templates with your project's `@vue/compiler-sfc`; `.astro` files with Astro's own compiler (`@astrojs/compiler`, or `@astrojs/compiler-rs` on Astro 7). Component elements (`<Button>`) are not tagged: they may not pass unknown props to the DOM.
+- **Components.** The JSX transform also records each top-level component (`function Card`, `memo(...)`, `forwardRef`, classes) as a non-enumerable `__claudeSource = { name, source }` on the component. The tree reads it from React's fibers, so it works on React 18 and 19, keeps declared names that bundlers rename (`memo(function Panel)` comes out as `Panel2`), and survives a production build.
+- **Why not `_debugSource`?** React 19 removed it, and with `@vitejs/plugin-react` 4.x its lines are shifted by the React Refresh code prepended before the JSX is compiled (a `<button>` on line 6 reports line 25). It is only the fallback.
+- **The endpoint** refuses files outside the workspace or that do not exist (400), cross-site requests (403), and on the standalone server any page not served from this machine.
 
-**The component tree.** The transform also records each top-level component of a module (`function Card`, `const Row = memo(...)`, `forwardRef`, classes) on the component itself, as a non-enumerable `__claudeSource` property holding its declared name and where it is defined. The menu walks the fiber's `return` chain from the clicked element and reads that property from each component's type, so it works the same on React 18 and 19. Components the transform did not see (libraries, `jsxSource: false`) show by name, with their `_debugSource` usage site on React 18 and nothing on React 19.
-
-Why the attribute comes first even on React 18: with `@vitejs/plugin-react` 4.x, the JSX is compiled after React Refresh code has been prepended to the module, and `_debugSource.lineNumber` comes out shifted by those lines (in the sample app, line 25 for a `<button>` on line 6).
-
-**Passing it on.** The endpoint `<base>/__claude-open` is served by the dev server only. It refuses a file outside the workspace root or one that does not exist (400) and cross-site requests (403), then hands the location to each `open` target; one failing does not stop the others (500 only when all fail). The `'claude'` target writes `{ file, line, column, at }` to `node_modules/.cache/claude-locator/open.json` under the workspace root, in a single rename. The Claude Code plugin, a hooks module, starts on `session.start`, looks for that file in the session folder and every folder above it, and on each new `at` calls the desktop app's `ccd_view` → `show_pane` tool.
+</details>
 
 ## Options
 
 ```ts
 claudeLocator({
-  open: ['claude'],           // 'claude' | 'editor' | 'clipboard' | 'opencode' | (location) => void, or a list
-  editor: 'cursor',           // launcher for the 'editor' target; default LAUNCH_EDITOR, EDITOR, then a guess
-  editorWindow: 'reuse',      // VS Code family: 'reuse' (the window used last) | 'project' (the workspace's window)
-  locationFormat: '{path}:{line}', // for 'clipboard' and 'opencode'
-  opencodeUrl: 'http://127.0.0.1:4096', // for 'opencode'
-  workspaceRoot: '/abs/path', // default: Vite's workspace root (monorepo root, else project root)
-  signalFile: 'node_modules/.cache/claude-locator/open.json', // relative to workspaceRoot
-  jsxSource: true,            // tag elements and components; React 19 needs it, React 18 falls back to _debugSource
-  exclude: [/\.stories\.tsx$/], // files the JSX transform skips
-  modifier: 'alt',            // 'alt' | 'ctrl' | 'meta' | 'shift'
-  patchDevtoolsHook: false,   // see below
+  open: ['claude'],                 // 'claude' | 'editor' | 'opencode' | 'clipboard' | { url } | fn, or a list
+  editor: 'cursor',                 // launcher for 'editor'; default LAUNCH_EDITOR, EDITOR, then a guess
+  editorWindow: 'reuse',            // VS Code family: 'reuse' (the window used last) | 'project'
+  locationFormat: '{path}:{line}',  // for 'clipboard' and 'opencode'
+  opencodeUrl: 'http://127.0.0.1:4096',
+  modifier: 'alt',                  // 'alt' | 'ctrl' | 'meta' | 'shift'
+  workspaceRoot: '/abs/path',       // default: Vite's workspace root (monorepo root, else project root)
+  signalFile: 'node_modules/.cache/claude-locator/open.json',
+  jsxSource: true,                  // the transforms; React 18 falls back to _debugSource without them
+  exclude: [/\.stories\.tsx$/],     // files the transforms skip
+  injectClient: true,               // add the page script to index.html; else import 'virtual:claude-locator/client'
+  inBuild: false,                   // also run in `vite build` — for demos only, never production
+  patchDevtoolsHook: false,         // fix __REACT_DEVTOOLS_GLOBAL_HOOK__.renderers for LocatorJS without the extension
 })
 ```
 
-`patchDevtoolsHook: true` fixes `__REACT_DEVTOOLS_GLOBAL_HOOK__.renderers` in browsers without the React DevTools extension. Without the extension the only hook is the stub React Refresh creates, whose `inject` returns an id but keeps nothing, so tools that read `renderers` (LocatorJS, for one) report "No source info found". The option inlines a script before every module script that makes `inject` keep each renderer. claude-locator does not need it; turn it on if you also use such a tool.
-
 ## Limits
 
-- **The Claude Code plugin API is early access.** Hooks modules and the desktop app's `ccd_view` tool may change between Claude Code releases without notice, and this plugin may stop working until it is updated. It was written against Claude Code 2.1.309.
-- **The `'claude'` target needs the Claude desktop app.** `show_pane` is a tool of the desktop app's Code tab; a terminal session has no Files pane, and the plugin then shows a toast. The pane opens only while the session is open in a window.
-- **The file must be inside the session's folder** (its working directory or a folder you granted it). The dev server's workspace root must be the session folder or one of the folders below it, since the plugin looks for the signal file from the session folder upwards.
-- **Every session watching the same folder opens the file**, each in its own pane.
-- **Vite + React only**, with an `index.html` the dev server serves (`transformIndexHtml` injects the client). Frameworks that render HTML themselves (SSR) are not covered yet.
-- **Granularity**: a click opens the host element; component definitions are in the tree menu. Only top-level components get a definition; components declared inside functions show by name only.
-- Lowercase JSX tags that are not DOM elements (`@react-three/fiber`'s `<mesh>`) get the attribute too; list such files in `exclude`.
+- **The Claude Code plugin API is early access.** Hooks modules and the desktop app's `ccd_view` tool may change between Claude Code releases without notice, and the `'claude'` target may stop working until the plugin is updated. Written against Claude Code 2.1.309.
+- **`'claude'` needs the desktop app**, with the session open in a window and the file inside its folder; the dev server's workspace root must be the session folder or below it. Every session watching that folder opens the file.
+- **Needs a keyboard.** No touch gesture yet.
+- **Angular** opens component classes, not template lines.
+- **Tested versions** (sample apps in `examples/`): React 18.3 and 19, Vue 3.5, Svelte 5, Solid 1.9, Preact 10, Astro 5.18 and 7.4, Angular 20. Svelte 4 keeps the same element records, so element lines should work there too, without the component chain; Astro 6 has not been tried.
+- Only top-level components get a definition in the tree. Lowercase JSX tags that are not DOM elements (`@react-three/fiber`'s `<mesh>`) get the attribute too; list such files in `exclude`.
 
 ## Develop
 
 ```bash
 pnpm install
-pnpm test            # Vite plugin unit tests (Vitest)
-claude plugin test plugin   # Claude Code plugin tests
-pnpm build          # the samples use the built package
-pnpm dev:react18     # sample app on http://localhost:5118
-pnpm dev:react19     # sample app on http://localhost:5119
-CLAUDE_LOCATOR_OPEN=claude,editor CLAUDE_LOCATOR_EDITOR=cursor pnpm dev:react19   # also open in Cursor
+pnpm build && pnpm test          # the samples use the built package
+claude plugin test plugin        # the Claude Code plugin's tests
+pnpm dev:react19                 # or: pnpm --filter example-{react18,vue,svelte,solid,preact,astro,angular,demo} dev
+CLAUDE_LOCATOR_OPEN=claude,editor CLAUDE_LOCATOR_EDITOR=cursor pnpm dev:react19
+node scripts/record-demo.mjs     # re-record docs/demo.gif from the demo site
 ```
 
-To try the Claude Code plugin from this folder without installing it, start a session with `claude --plugin-dir ./plugin`.
+Try the Claude Code plugin from this folder without installing it: `claude --plugin-dir ./plugin`.
 
 ## License
 

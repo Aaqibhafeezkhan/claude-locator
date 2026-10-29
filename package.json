@@ -4,13 +4,16 @@
   "type": "module",
   "packageManager": "pnpm@10.29.3",
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   },
   "scripts": {
     "build": "pnpm --filter vite-plugin-claude-locator build",
     "test": "pnpm --filter vite-plugin-claude-locator test",
     "typecheck": "pnpm --filter vite-plugin-claude-locator typecheck",
     "dev:react18": "pnpm --filter example-react18 dev",
-    "dev:react19": "pnpm --filter example-react19 dev"
+    "dev:react19": "pnpm --filter example-react19 dev",
+    "dev:demo": "pnpm --filter example-demo dev"
   }
 }

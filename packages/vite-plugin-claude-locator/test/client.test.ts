@@ -342,3 +342,19 @@ describe('Angular', () => {
     ])
   })
 })
+
+describe('page integration', () => {
+  it('opens URL targets in the click and tells the page what was opened', async () => {
+    const openWindow = vi.fn()
+    vi.stubGlobal('open', openWindow)
+    const seen: unknown[] = []
+    const listener = (event: Event) => seen.push((event as CustomEvent).detail)
+    window.addEventListener('claude-locator:open', listener)
+    api = startClaudeLocator({ ...options, endpoint: null, openUrls: ['https://github.com/o/r/blob/main/{path}#L{line}'] })
+    document.body.innerHTML = '<i data-claude-source="src/App.tsx:4:5">i</i>'
+    ;(document.querySelector('i') as Element).dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, altKey: true }))
+    expect(openWindow).toHaveBeenCalledWith('https://github.com/o/r/blob/main/src/App.tsx#L4', '_blank', 'noopener')
+    expect(seen).toEqual([{ file: 'src/App.tsx', line: 4, column: 5 }])
+    window.removeEventListener('claude-locator:open', listener)
+  })
+})

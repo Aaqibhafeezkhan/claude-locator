@@ -8,7 +8,7 @@ import { patchReactDevtoolsHook } from './devtools-hook'
 import type { EditorWindow } from './editor'
 import { DEFAULT_LOCATION_FORMAT, DEFAULT_OPENCODE_URL } from './opencode'
 import { createOpenHandler, DEFAULT_SIGNAL_FILE, ENDPOINT, type OpenSignal } from './server'
-import { createOpeners, describeTargets, serverTargets, type OpenTarget } from './targets'
+import { createOpeners, describeTargets, serverTargets, urlTargets, type OpenTarget } from './targets'
 import { addAstroSourceAttributes, addVueSourceAttributes, type AstroCompiler, type VueCompiler } from './templates'
 import { addSourceAttributes, COMPONENT_SOURCE_PROPERTY, shouldTransform, SOURCE_ATTRIBUTE } from './transform'
 
@@ -66,6 +66,11 @@ export interface ClaudeLocatorOptions {
    * import `virtual:claude-locator/client` from a page script instead; the Astro integration does that. Default: true.
    */
   injectClient?: boolean
+  /**
+   * Also run in `vite build`, for a demo or a preview deploy. Every element then carries its source path:
+   * never turn this on for a production build. Default: false.
+   */
+  inBuild?: boolean
 }
 
 /** Import this from a page script where there is no `index.html` to inject into. */
@@ -123,6 +128,7 @@ export default function claudeLocator(options: ClaudeLocatorOptions = {}): Plugi
   let workspaceRoot = ''
   let projectRoot = ''
   let base = '/'
+  let isBuild = false
   let vueCompiler: VueCompiler | null | undefined
   let astroCompiler: Promise<AstroCompiler | undefined> | undefined
 
@@ -131,8 +137,11 @@ export default function claudeLocator(options: ClaudeLocatorOptions = {}): Plugi
     const clientOptions: ClientOptions = {
       endpoint: hasServerTarget ? `${base.replace(/\/?$/, '/')}${ENDPOINT}` : null,
       copyFormat: targets.includes('clipboard') ? (options.locationFormat ?? DEFAULT_LOCATION_FORMAT) : null,
-      workspaceRoot,
-      projectRoot,
+      openUrls: urlTargets(targets),
+      // A build's pages are published: keep this machine's folders out of them. Its paths are all relative anyway,
+      // since the dev-only sources (React's _debugSource, Vue's __file, Svelte's __svelte_meta) are not there.
+      workspaceRoot: isBuild ? '' : workspaceRoot,
+      projectRoot: isBuild ? '' : projectRoot,
       modifier: `${modifier}Key`,
       attribute: SOURCE_ATTRIBUTE,
       componentProperty: COMPONENT_SOURCE_PROPERTY,
@@ -142,10 +151,11 @@ export default function claudeLocator(options: ClaudeLocatorOptions = {}): Plugi
 
   return {
     name: 'claude-locator',
-    apply: 'serve',
+    apply: options.inBuild ? undefined : 'serve',
     enforce: 'pre',
 
     configResolved(config) {
+      isBuild = config.command === 'build'
       projectRoot = config.root
       workspaceRoot = path.resolve(options.workspaceRoot ?? searchForWorkspaceRoot(config.root))
       // A full-URL base (a CDN) does not serve the dev endpoint; fall back to the origin

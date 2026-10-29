@@ -15,6 +15,8 @@ export interface BrowserOptions {
   copy?: boolean | string
   /** Only copy, with no server. Default: false. */
   copyOnly?: boolean
+  /** URL templates the page opens on each click, e.g. `vscode://file/{absolutePath}:{line}:{column}`. */
+  openUrls?: string[]
   /** The key held while hovering and clicking. Default: `alt` (Option on macOS). */
   modifier?: 'alt' | 'ctrl' | 'meta' | 'shift'
 }
@@ -25,6 +27,7 @@ export function startClaudeLocator(options: BrowserOptions = {}): ClientApi {
   return start({
     endpoint: options.copyOnly ? null : `${server}/__claude-open`,
     copyFormat,
+    openUrls: options.openUrls,
     workspaceRoot: '',
     projectRoot: '',
     modifier: `${options.modifier ?? 'alt'}Key`,

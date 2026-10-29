@@ -8,6 +8,8 @@ export interface ClientOptions {
   endpoint: string | null
   /** Template the location is copied with, e.g. `{path}:{line}`; null to copy nothing. */
   copyFormat: string | null
+  /** URL templates the page opens on each click, e.g. `vscode://file/{absolutePath}:{line}`. */
+  openUrls?: string[]
   /** The workspace root, for `{path}` in `copyFormat`. */
   workspaceRoot: string
   /** Vite's project root: Svelte records paths relative to it. */
@@ -438,8 +440,14 @@ export function startClaudeLocator(options: ClientOptions): ClientApi {
     }
   }
 
-  // Resolves to [copied: true / false / undefined when not asked, sent]
+  // Resolves to [copied: true / false / undefined when not asked, sent]. Called in the click, which lets the page
+  // write to the clipboard and open a window
   const copyAndSend = (source: Source): Promise<[boolean | undefined, boolean]> => {
+    for (const template of options.openUrls ?? []) {
+      window.open(formatLocation(template, source), '_blank', 'noopener')
+    }
+    // For the page itself: `window.addEventListener('claude-locator:open', (e) => e.detail)`
+    window.dispatchEvent(new CustomEvent('claude-locator:open', { detail: source }))
     const copied = options.copyFormat === null ? undefined : copy(formatLocation(options.copyFormat, source))
     return Promise.all([copied, send(source)])
   }
@@ -455,9 +463,10 @@ export function startClaudeLocator(options: ClientOptions): ClientApi {
       if (!isSent) {
         flash('Not opened: see the dev server')
       } else if (isCopied === false) {
-        flash(options.endpoint ? `Opened ${name} · copy blocked` : 'Copy blocked by the browser')
+        flash(options.endpoint || options.openUrls?.length ? `Opened ${name} · copy blocked` : 'Copy blocked by the browser')
       } else {
-        flash(options.endpoint ? `Opened ${name}${isCopied ? ' · copied' : ''}` : `Copied ${name}`)
+        const opened = options.endpoint || options.openUrls?.length
+        flash(opened ? `Opened ${name}${isCopied ? ' · copied' : ''}` : `Copied ${name}`)
       }
     })
   }

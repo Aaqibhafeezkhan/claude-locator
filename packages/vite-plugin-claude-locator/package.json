@@ -71,6 +71,6 @@
     "vitest": "^2.1.0"
   },
   "bin": {
-    "claude-locator": "./dist/cli.js"
+    "claude-locator": "dist/cli.js"
   }
 }

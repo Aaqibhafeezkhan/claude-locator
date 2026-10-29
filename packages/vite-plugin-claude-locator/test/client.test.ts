@@ -2,7 +2,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { startClaudeLocator, type ClientApi, type ClientOptions } from '../src/client'
 
-const options: ClientOptions = { endpoint: '/base/__claude-open', modifier: 'altKey', attribute: 'data-claude-source' }
+const options: ClientOptions = {
+  endpoint: '/base/__claude-open',
+  modifier: 'altKey',
+  attribute: 'data-claude-source',
+  componentProperty: '__claudeSource',
+}
 
 let api: ClientApi | undefined
 
@@ -107,5 +112,90 @@ describe('Option+click', () => {
       new MouseEvent('click', { bubbles: true, cancelable: true, altKey: true }),
     )
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+// A component function as the transform leaves it
+const component = (name: string, where?: string): (() => null) => {
+  const fn = { [name]: () => null }[name]
+  if (where) {
+    Object.defineProperty(fn, '__claudeSource', { value: { name, source: where } })
+  }
+  return fn
+}
+
+describe('findTree', () => {
+  const mountTree = () => {
+    document.body.innerHTML = '<button data-claude-source="src/Counter.tsx:6:5">b</button>'
+    const button = document.querySelector('button') as Element
+    const counter = component('Counter', 'src/Counter.tsx:3:1')
+    // A bundler renamed the function inside `memo` (`Card2`); the recorded name wins
+    const card = component('Card2')
+    const memoCard = { type: card, $$typeof: Symbol.for('react.memo'), __claudeSource: { name: 'Card', source: 'src/Card.tsx:1:1' } }
+    const libraryButton = component('LibraryButton')
+    const appFiber = { type: component('App', 'src/App.tsx:3:1'), return: { type: Symbol.for('react.strict_mode') } }
+    const memoInner = { type: card, elementType: memoCard, return: appFiber }
+    const memoOuter = { type: memoCard, return: memoInner }
+    const libraryFiber = { type: libraryButton, return: memoOuter }
+    const counterFiber = { type: counter, return: libraryFiber }
+    attachFiber(button, { type: 'button', return: counterFiber })
+    return button
+  }
+
+  it('lists the element, then each component above it with where it is defined', () => {
+    api = startClaudeLocator(options)
+    expect(api.findTree(mountTree())).toEqual([
+      { label: '<button>', source: { file: 'src/Counter.tsx', line: 6, column: 5 } },
+      { label: 'Counter', source: { file: 'src/Counter.tsx', line: 3, column: 1 } },
+      { label: 'LibraryButton', source: undefined },
+      { label: 'Card', source: { file: 'src/Card.tsx', line: 1, column: 1 } },
+      { label: 'App', source: { file: 'src/App.tsx', line: 3, column: 1 } },
+    ])
+  })
+
+  it('uses _debugSource for components the transform did not tag (React 18)', () => {
+    api = startClaudeLocator(options)
+    const div = document.createElement('div')
+    attachFiber(div, {
+      type: 'div',
+      return: { type: component('Panel'), _debugSource: { fileName: '/repo/src/App.tsx', lineNumber: 9 } },
+    })
+    expect(api.findTree(div)[1]).toEqual({ label: 'Panel', source: { file: '/repo/src/App.tsx', line: 9, column: undefined } })
+  })
+
+  it('opens a row of the menu shown on Option+right-click', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal('fetch', fetchMock)
+    api = startClaudeLocator(options)
+    const button = mountTree()
+    const appMenu = vi.fn()
+    button.addEventListener('contextmenu', appMenu)
+
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, altKey: true, clientX: 10, clientY: 10 })
+    button.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(true)
+    expect(appMenu).not.toHaveBeenCalled()
+
+    const rows = [...document.querySelectorAll('[role="menuitem"]')] as HTMLButtonElement[]
+    expect(rows.map((row) => row.textContent)).toEqual([
+      '<button>src/Counter.tsx:6',
+      'Countersrc/Counter.tsx:3',
+      'LibraryButtonnot in project',
+      'Cardsrc/Card.tsx:1',
+      'Appsrc/App.tsx:3',
+    ])
+    expect(rows[2].disabled).toBe(true)
+
+    rows[3].click()
+    expect(fetchMock).toHaveBeenCalledWith('/base/__claude-open?file=src%2FCard.tsx&line=1&column=1', { method: 'POST' })
+    expect(document.querySelectorAll('[role="menuitem"]')).toHaveLength(0)
+  })
+
+  it('leaves a right-click without the modifier to the app', () => {
+    api = startClaudeLocator(options)
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    mountTree().dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(false)
+    expect(document.querySelector('[role="menu"]')).toBeNull()
   })
 })

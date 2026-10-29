@@ -64,20 +64,30 @@ export const writeSignal = (signalFile: string, signal: OpenSignal): void => {
   fs.renameSync(temp, signalFile)
 }
 
+/** Opens a location somewhere: the Claude desktop app, an editor, a callback of the user's. */
+export type Opener = (signal: OpenSignal) => void | Promise<void>
+
+/** Hands the location to the Claude Code plugin through the signal file. */
+export const claudeOpener =
+  (signalFile: string): Opener =>
+  (signal) =>
+    writeSignal(signalFile, signal)
+
 export interface OpenHandlerOptions {
   workspaceRoot: string
-  signalFile: string
+  openers: Opener[]
   now?: () => number
+  onError?: (error: unknown) => void
 }
 
 type Next = (error?: unknown) => void
 
 /**
  * Connect middleware for `<base>/__claude-open?file=<path>&line=<n>&column=<n>`.
- * 204 when the signal was written, 400 for a file outside the workspace, 403 for a cross-site request.
+ * 204 when at least one target took it, 500 when all failed, 400 for a file outside the workspace, 403 for a cross-site request.
  */
-export const createOpenHandler = ({ workspaceRoot, signalFile, now = Date.now }: OpenHandlerOptions) =>
-  (req: IncomingMessage, res: ServerResponse, next: Next): void => {
+export const createOpenHandler = ({ workspaceRoot, openers, now = Date.now, onError }: OpenHandlerOptions) =>
+  async (req: IncomingMessage, res: ServerResponse, next: Next): Promise<void> => {
     const url = new URL(req.url ?? '/', 'http://localhost')
     if (!url.pathname.endsWith(`/${ENDPOINT}`)) {
       next()
@@ -103,12 +113,18 @@ export const createOpenHandler = ({ workspaceRoot, signalFile, now = Date.now }:
       return
     }
 
-    writeSignal(signalFile, {
+    const signal: OpenSignal = {
       file,
       line: positiveInt(url.searchParams.get('line')),
       column: positiveInt(url.searchParams.get('column')),
       at: now(),
-    })
-    res.statusCode = 204
+    }
+    // Each target on its own: an editor that is not installed does not keep the Claude pane from opening
+    const results = await Promise.allSettled(openers.map(async (opener) => opener(signal)))
+    const failures = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+    for (const failure of failures) {
+      onError?.(failure.reason)
+    }
+    res.statusCode = failures.length === openers.length && openers.length > 0 ? 500 : 204
     res.end()
   }

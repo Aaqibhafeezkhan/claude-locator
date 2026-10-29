@@ -26,14 +26,48 @@ describe('addSourceAttributes', () => {
     expect(result?.code).toContain('<span data-claude-source={"src/App.tsx:3:5"}>')
   })
 
-  it('leaves components, member expressions and fragments alone', () => {
-    const code = 'const A = () => <><Button /><motion.div /><Foo.Bar /></>'
+  it('leaves component elements, member expressions and fragments without the attribute', () => {
+    const code = 'const a = () => <><Button /><motion.div /><Foo.Bar /></>'
     expect(addSourceAttributes(code, '/repo/src/A.tsx', root)).toBeNull()
   })
 
   it('keeps an attribute the author already wrote', () => {
-    const code = 'const A = () => <div data-claude-source="x:1:1" />'
+    const code = 'const a = () => <div data-claude-source="x:1:1" />'
     expect(addSourceAttributes(code, '/repo/src/A.tsx', root)).toBeNull()
+  })
+
+  it('records where each top-level component is defined', () => {
+    const code = [
+      'export function Card() { return <Button /> }',
+      'const Title = () => <Text />',
+      'export const Row = memo(function Row() { return <Cell /> })',
+      'export default class Page extends Component {}',
+      "const Field = React.forwardRef((props, ref) => null), Other = function () { return null }",
+      "const MAX = 5, Schema = z.object({}), helper = () => <Box />",
+      'function lower() { return <Box /> }',
+    ].join('\n')
+    const output = addSourceAttributes(code, '/repo/src/Card.tsx', root)!.code
+    const tagged = [
+      ...output.matchAll(/defineProperty\((\w+),"__claudeSource",\{value:\{"name":"(\w+)","source":"([^"]+)"\}/g),
+    ].map(([, variable, name, where]) => `${variable === name ? name : `${variable}!=${name}`} ${where}`)
+    expect(tagged).toEqual([
+      'Card src/Card.tsx:1:1',
+      'Title src/Card.tsx:2:1',
+      'Row src/Card.tsx:3:1',
+      'Page src/Card.tsx:4:1',
+      'Field src/Card.tsx:5:7',
+      'Other src/Card.tsx:5:55',
+    ])
+  })
+
+  it('tags components so that a frozen value cannot break the module', () => {
+    const output = addSourceAttributes('export const A = () => <B />', '/repo/src/A.tsx', root)!.code
+    const tag = output.slice(output.indexOf('\n;') + 2)
+    const component = (): null => null
+    new Function('A', tag)(component)
+    expect((component as unknown as Record<string, unknown>).__claudeSource).toEqual({ name: 'A', source: 'src/A.tsx:1:1' })
+    expect(Object.keys(component)).toEqual([])
+    expect(() => new Function('A', tag)(Object.freeze(() => null))).not.toThrow()
   })
 
   it('parses TypeScript generics and casts in TSX', () => {

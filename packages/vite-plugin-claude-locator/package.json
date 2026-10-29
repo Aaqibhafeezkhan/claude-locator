@@ -1,7 +1,7 @@
 {
   "name": "vite-plugin-claude-locator",
-  "version": "0.1.0",
-  "description": "Option+click a React element in your Vite dev server to open its source in the Claude desktop app's Files pane.",
+  "version": "0.2.0",
+  "description": "Option+click a React element in your Vite dev server to open its source in the Claude desktop app's Files pane or your editor, with a component tree.",
   "license": "MIT",
   "author": "scs0209",
   "repository": {
@@ -41,6 +41,7 @@
   },
   "dependencies": {
     "@babel/parser": "^7.26.0",
+    "launch-editor": "^2.14.2",
     "magic-string": "^0.30.0"
   },
   "devDependencies": {

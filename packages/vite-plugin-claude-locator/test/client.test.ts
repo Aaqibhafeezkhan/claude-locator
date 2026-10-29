@@ -4,6 +4,8 @@ import { startClaudeLocator, type ClientApi, type ClientOptions } from '../src/c
 
 const options: ClientOptions = {
   endpoint: '/base/__claude-open',
+  copyFormat: null,
+  workspaceRoot: '/repo',
   modifier: 'altKey',
   attribute: 'data-claude-source',
   componentProperty: '__claudeSource',
@@ -197,5 +199,50 @@ describe('findTree', () => {
     mountTree().dispatchEvent(event)
     expect(event.defaultPrevented).toBe(false)
     expect(document.querySelector('[role="menu"]')).toBeNull()
+  })
+})
+
+describe('clipboard', () => {
+  const clickWithModifier = (element: Element): void => {
+    element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, altKey: true }))
+  }
+
+  it('copies the location in the format asked, workspace-relative, and still sends it', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal('fetch', fetchMock)
+    api = startClaudeLocator({ ...options, copyFormat: '@{path}#L{line}' })
+    document.body.innerHTML = '<i data-claude-source="src/App.tsx:4:5">i</i>'
+    clickWithModifier(document.querySelector('i') as Element)
+    expect(writeText).toHaveBeenCalledWith('@src/App.tsx#L4')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('makes an absolute fiber path relative, and fills absolutePath and column', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    api = startClaudeLocator({ ...options, endpoint: null, copyFormat: '{path} {absolutePath} {line}:{column}' })
+    const button = document.createElement('button')
+    attachFiber(button, { _debugSource: { fileName: '/repo/src/App.tsx', lineNumber: 7, columnNumber: 3 } })
+    document.body.appendChild(button)
+    expect(await api.open(api.findSource(button)!)).toBe(true)
+    expect(writeText).toHaveBeenCalledWith('src/App.tsx /repo/src/App.tsx 7:3')
+  })
+
+  it('calls no endpoint when the clipboard is the only target', async () => {
+    vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } })
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    api = startClaudeLocator({ ...options, endpoint: null, copyFormat: '{path}:{line}' })
+    expect(await api.open({ file: 'src/App.tsx', line: 1 })).toBe(true)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('reports a copy the browser refused', async () => {
+    vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } })
+    document.execCommand = vi.fn(() => false)
+    api = startClaudeLocator({ ...options, endpoint: null, copyFormat: '{path}:{line}' })
+    expect(await api.open({ file: 'src/App.tsx', line: 1 })).toBe(false)
   })
 })

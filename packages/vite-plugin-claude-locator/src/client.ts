@@ -4,8 +4,12 @@
  */
 
 export interface ClientOptions {
-  /** URL of the dev-server endpoint, e.g. `/__claude-open`. */
-  endpoint: string
+  /** URL of the dev-server endpoint, e.g. `/__claude-open`; null when every target is in the page (the clipboard). */
+  endpoint: string | null
+  /** Template the location is copied with, e.g. `{path}:{line}`; null to copy nothing. */
+  copyFormat: string | null
+  /** The workspace root, for `{path}` in `copyFormat`. */
+  workspaceRoot: string
   /** The modifier held while hovering and clicking. */
   modifier: 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'
   /** The attribute the JSX transform adds, e.g. `data-claude-source`. */
@@ -33,7 +37,7 @@ export interface ClientApi {
   findSource: (element: Element) => Source | undefined
   /** The element and the components that rendered it, innermost first. */
   findTree: (element: Element) => TreeItem[]
-  /** Sends a location to the dev server; resolves to whether it accepted it. */
+  /** Copies the location if asked to, and sends it to the dev server; resolves to whether that all worked. */
   open: (source: Source) => Promise<boolean>
   /** Removes listeners and the overlay. */
   dispose: () => void
@@ -240,7 +244,44 @@ export function startClaudeLocator(options: ClientOptions): ClientApi {
     }, 1200)
   }
 
-  const open = async (source: Source): Promise<boolean> => {
+  // The same template filling as formatLocation in opencode.ts, which this file cannot import
+  const formatLocation = (template: string, source: Source): string => {
+    const root = options.workspaceRoot.replace(/[\\/]+$/, '')
+    const isAbsolute = /^([\\/]|[A-Za-z]:)/.test(source.file)
+    const absolutePath = isAbsolute ? source.file : `${root}/${source.file}`
+    const relative = isAbsolute && source.file.startsWith(`${root}/`) ? source.file.slice(root.length + 1) : source.file
+    return template
+      .split('{path}').join(relative)
+      .split('{absolutePath}').join(absolutePath)
+      .split('{line}').join(String(source.line ?? 1))
+      .split('{column}').join(String(source.column ?? 1))
+  }
+
+  // In a click handler, while the page may still write to the clipboard; the textarea is for browsers that refuse
+  const copy = async (text: string): Promise<boolean> => {
+    try {
+      await navigator.clipboard.writeText(text)
+      return true
+    } catch {
+      const area = document.createElement('textarea')
+      area.value = text
+      area.style.cssText = 'position:fixed;top:-1000px;opacity:0;'
+      document.body.appendChild(area)
+      area.select()
+      try {
+        return document.execCommand('copy')
+      } catch {
+        return false
+      } finally {
+        area.remove()
+      }
+    }
+  }
+
+  const send = async (source: Source): Promise<boolean> => {
+    if (!options.endpoint) {
+      return true
+    }
     const query = new URLSearchParams({ file: source.file })
     if (source.line) {
       query.set('line', String(source.line))
@@ -256,8 +297,28 @@ export function startClaudeLocator(options: ClientOptions): ClientApi {
     }
   }
 
+  // Resolves to [copied: true / false / undefined when not asked, sent]
+  const copyAndSend = (source: Source): Promise<[boolean | undefined, boolean]> => {
+    const copied = options.copyFormat === null ? undefined : copy(formatLocation(options.copyFormat, source))
+    return Promise.all([copied, send(source)])
+  }
+
+  const open = async (source: Source): Promise<boolean> => {
+    const [isCopied, isSent] = await copyAndSend(source)
+    return isCopied !== false && isSent
+  }
+
   const openAndFlash = (source: Source): void => {
-    void open(source).then((isOpened) => flash(isOpened ? `Opened ${shortName(source)}` : 'Not opened: see the dev server'))
+    const name = shortName(source)
+    void copyAndSend(source).then(([isCopied, isSent]) => {
+      if (!isSent) {
+        flash('Not opened: see the dev server')
+      } else if (isCopied === false) {
+        flash(options.endpoint ? `Opened ${name} · copy blocked` : 'Copy blocked by the browser')
+      } else {
+        flash(options.endpoint ? `Opened ${name}${isCopied ? ' · copied' : ''}` : `Copied ${name}`)
+      }
+    })
   }
 
   const closeMenu = (): void => {

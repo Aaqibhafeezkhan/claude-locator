@@ -19,10 +19,11 @@ export default defineConfig({
 })
 ```
 
-For an editor instead, or as well (Cursor, VS Code, Windsurf, Zed, WebStorm, ... through their launcher):
+For an editor instead, or as well (Cursor, VS Code, Windsurf, Zed, WebStorm, ... through their launcher), the clipboard (to paste into Codex or any agent), or a running OpenCode TUI's prompt:
 
 ```ts
 claudeLocator({ open: ['claude', 'editor'], editor: 'cursor' })
+claudeLocator({ open: ['clipboard', 'opencode'] })
 ```
 
 Works with React 18 and 19, dev server only: a `data-claude-source` attribute and component definitions added at transform time, with fiber `_debugSource` as the fallback on React 18.

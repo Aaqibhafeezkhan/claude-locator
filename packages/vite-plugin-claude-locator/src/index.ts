@@ -3,19 +3,22 @@ import { searchForWorkspaceRoot, type HtmlTagDescriptor, type Plugin } from 'vit
 import { startClaudeLocator, type ClientOptions } from './client'
 import { patchReactDevtoolsHook } from './devtools-hook'
 import { editorOpener, type EditorWindow } from './editor'
+import { DEFAULT_LOCATION_FORMAT, DEFAULT_OPENCODE_URL, opencodeOpener } from './opencode'
 import { claudeOpener, createOpenHandler, DEFAULT_SIGNAL_FILE, ENDPOINT, type Opener, type OpenSignal } from './server'
 import { addSourceAttributes, COMPONENT_SOURCE_PROPERTY, shouldTransform, SOURCE_ATTRIBUTE } from './transform'
 
 export type { OpenSignal }
-export { COMPONENT_SOURCE_PROPERTY, DEFAULT_SIGNAL_FILE, ENDPOINT, SOURCE_ATTRIBUTE }
+export { COMPONENT_SOURCE_PROPERTY, DEFAULT_LOCATION_FORMAT, DEFAULT_OPENCODE_URL, DEFAULT_SIGNAL_FILE, ENDPOINT, SOURCE_ATTRIBUTE }
 
 /**
- * Where a click opens the source:
+ * Where a click sends the source:
  * - `'claude'`: the Claude desktop app's Files pane, through the claude-locator Claude Code plugin;
  * - `'editor'`: a code editor through its command-line launcher (Cursor, VS Code, Windsurf, Zed, WebStorm, ...);
- * - a function: called with the location, for any other tool.
+ * - `'clipboard'`: the clipboard, as `locationFormat`, to paste into any agent's prompt (Codex, OpenCode, ...);
+ * - `'opencode'`: the prompt of a running OpenCode TUI, as `locationFormat`;
+ * - a function: called on the dev server with the location, for any other tool.
  */
-export type OpenTarget = 'claude' | 'editor' | ((location: OpenSignal) => void | Promise<void>)
+export type OpenTarget = 'claude' | 'editor' | 'clipboard' | 'opencode' | ((location: OpenSignal) => void | Promise<void>)
 
 export interface ClaudeLocatorOptions {
   /** Where a click opens. Default: `['claude']`. */
@@ -31,6 +34,13 @@ export interface ClaudeLocatorOptions {
    * `'project'`, the one that has the workspace open, opening it if needed. Default: `'reuse'`.
    */
   editorWindow?: EditorWindow
+  /**
+   * How `'clipboard'` and `'opencode'` write the location: `{path}` (relative to the workspace), `{absolutePath}`,
+   * `{line}`, `{column}`. Default: `'{path}:{line}'`.
+   */
+  locationFormat?: string
+  /** The OpenCode server of the `'opencode'` target. Default: `http://127.0.0.1:4096`, as `opencode --port 4096` serves. */
+  opencodeUrl?: string
   /**
    * Files outside this folder are refused, and the signal file is written under it.
    * Default: Vite's workspace root (the monorepo root when there is one, else the project root).
@@ -87,14 +97,21 @@ export default function claudeLocator(options: ClaudeLocatorOptions = {}): Plugi
     },
 
     configureServer(server) {
-      const openers: Opener[] = targets.map((target) =>
-        target === 'claude'
-          ? claudeOpener(path.resolve(workspaceRoot, signalFile))
-          : target === 'editor'
-            ? editorOpener(options.editor, { workspaceRoot, window: options.editorWindow })
-            : target,
-      )
-      const targetNames = targets.map((target) => (typeof target === 'string' ? target : 'function')).join(', ')
+      // The clipboard is written in the page, which holds the click's permission to; the rest run here
+      const serverTargets = targets.filter((target) => target !== 'clipboard')
+      const openers: Opener[] = serverTargets.map((target) => {
+        switch (target) {
+          case 'claude':
+            return claudeOpener(path.resolve(workspaceRoot, signalFile))
+          case 'editor':
+            return editorOpener(options.editor, { workspaceRoot, window: options.editorWindow })
+          case 'opencode':
+            return opencodeOpener({ workspaceRoot, url: options.opencodeUrl, format: options.locationFormat })
+          default:
+            return target
+        }
+      })
+      const targetNames = serverTargets.map((target) => (typeof target === 'string' ? target : 'function')).join(', ')
       const { logger } = server.config
       server.middlewares.use(
         createOpenHandler({
@@ -123,8 +140,11 @@ export default function claudeLocator(options: ClaudeLocatorOptions = {}): Plugi
     },
 
     transformIndexHtml() {
+      const hasServerTarget = targets.some((target) => target !== 'clipboard')
       const clientOptions: ClientOptions = {
-        endpoint: `${base.replace(/\/?$/, '/')}${ENDPOINT}`,
+        endpoint: hasServerTarget ? `${base.replace(/\/?$/, '/')}${ENDPOINT}` : null,
+        copyFormat: targets.includes('clipboard') ? (options.locationFormat ?? DEFAULT_LOCATION_FORMAT) : null,
+        workspaceRoot,
         modifier: `${modifier}Key`,
         attribute: SOURCE_ATTRIBUTE,
         componentProperty: COMPONENT_SOURCE_PROPERTY,

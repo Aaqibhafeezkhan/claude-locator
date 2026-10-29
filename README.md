@@ -2,7 +2,7 @@
 
 Hold <kbd>Option</kbd> (<kbd>Alt</kbd>) and click any element of your React app in the Vite dev server: the Claude desktop app opens the file and line that rendered it in its side **Files** pane, next to your Claude Code session. <kbd>Option</kbd>+right-click lists the components above it, to open any of them.
 
-It works in any browser, including the built-in browsers of coding agents, which have no React DevTools extension and often do not hand `cursor://` / `vscode://` links to your editor: the dev server opens the file, not the browser. Besides the Claude desktop app it can open your editor (Cursor, VS Code, Windsurf, Zed, WebStorm, ...) or call a function of yours.
+It works in any browser, including the built-in browsers of coding agents, which have no React DevTools extension and often do not hand `cursor://` / `vscode://` links to your editor: the dev server opens the file, not the browser. Besides the Claude desktop app it can open your editor (Cursor, VS Code, Windsurf, Zed, WebStorm, ...), copy the location for any agent's prompt (Codex, OpenCode, ...), type it into a running OpenCode TUI, or call a function of yours.
 
 For the Claude desktop app it has two parts, and you need both:
 
@@ -78,6 +78,8 @@ claudeLocator({ open: ['claude', 'editor'], editor: 'cursor' })
 | --- | --- | --- |
 | `'claude'` (default) | the Claude desktop app's Files pane | the Claude Code plugin above |
 | `'editor'` | your editor, through its command-line launcher | the launcher: `cursor`, `code`, `windsurf`, `zed`, `webstorm`, ... |
+| `'clipboard'` | the clipboard, as `src/Counter.tsx:6`, to paste into any agent's prompt | nothing; written by the page, in the click |
+| `'opencode'` | the prompt of a running OpenCode TUI, as `src/Counter.tsx:6 ` | the TUI started with a known port: `opencode --port 4096` |
 | a function | wherever you send it | `(location) => void`, called on the dev server with `{ file, line, column, at }` |
 
 So in Cursor, Windsurf or VS Code with an agent, the agent's built-in browser can stay the browser and the file opens in a tab of the same window. Give `editor` the launcher's name:
@@ -86,9 +88,18 @@ So in Cursor, Windsurf or VS Code with an agent, the agent's built-in browser ca
 - On **macOS**, `cursor`, `code` and `windsurf` run the launcher inside the installed app (`/Applications/Cursor.app/Contents/Resources/app/bin/cursor`, ...). The same name on `PATH` can be something else: Cursor's agent CLI installs a `~/.local/bin/cursor` shim that refuses to open files unless the IDE's own launcher is on `PATH` too.
 - **Other editors** go through [`launch-editor`](https://github.com/vitejs/launch-editor), as Vite's own `/__open-in-editor` does. With no `editor`, `LAUNCH_EDITOR`, then `EDITOR`, then the editor that is running decides.
 
+**Codex, OpenCode and other agents.** The Codex app and the OpenCode desktop app have no public way, as of this writing, for another program to show a file in their own panes (the Codex app's `codex://` links open Settings; OpenCode desktop's `opencode://` links open a project or a new session). So for them the location goes where you talk to the agent:
+
+```ts
+claudeLocator({ open: ['clipboard', 'editor'], editor: 'cursor' }) // Codex app: paste into the composer, read in Cursor
+claudeLocator({ open: ['opencode', 'editor'], editor: 'zed' })     // OpenCode TUI: typed into its prompt
+```
+
+`'opencode'` calls `POST /tui/append-prompt` on the OpenCode server, `http://127.0.0.1:4096` unless `opencodeUrl` says otherwise; the TUI listens on a random port unless started with `--port`. The OpenCode desktop app does not act on that call. `locationFormat` changes what is written: `{path}` (relative to the workspace), `{absolutePath}`, `{line}`, `{column}`, e.g. `'@{path}#L{line}'`.
+
 Each click is logged by the dev server, `[claude-locator] src/Counter.tsx:6 → claude, editor`, and a target that fails logs a warning.
 
-Verified: the Claude desktop app's Files pane, and Cursor's built-in browser opening the file in a tab of the same window (macOS). Other editors have not been tried with this plugin.
+Verified (macOS): the Claude desktop app's Files pane; Cursor's built-in browser opening the file in a tab of the same window; the clipboard; the location typed into the OpenCode TUI prompt (OpenCode 1.18). Other editors, and the Codex app, have not been tried with this plugin.
 
 ## How it works
 
@@ -124,9 +135,11 @@ Why the attribute comes first even on React 18: with `@vitejs/plugin-react` 4.x,
 
 ```ts
 claudeLocator({
-  open: ['claude'],           // 'claude' | 'editor' | (location) => void, or a list of them
+  open: ['claude'],           // 'claude' | 'editor' | 'clipboard' | 'opencode' | (location) => void, or a list
   editor: 'cursor',           // launcher for the 'editor' target; default LAUNCH_EDITOR, EDITOR, then a guess
   editorWindow: 'reuse',      // VS Code family: 'reuse' (the window used last) | 'project' (the workspace's window)
+  locationFormat: '{path}:{line}', // for 'clipboard' and 'opencode'
+  opencodeUrl: 'http://127.0.0.1:4096', // for 'opencode'
   workspaceRoot: '/abs/path', // default: Vite's workspace root (monorepo root, else project root)
   signalFile: 'node_modules/.cache/claude-locator/open.json', // relative to workspaceRoot
   jsxSource: true,            // tag elements and components; React 19 needs it, React 18 falls back to _debugSource

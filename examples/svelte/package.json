@@ -1,0 +1,12 @@
+{
+  "name": "example-svelte",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "vite" },
+  "dependencies": { "svelte": "^5.0.0" },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.0.0",
+    "vite": "^6.0.0",
+    "vite-plugin-claude-locator": "workspace:*"
+  }
+}

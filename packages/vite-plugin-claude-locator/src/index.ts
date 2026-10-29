@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import { searchForWorkspaceRoot, type HtmlTagDescriptor, type Plugin } from 'vite'
 import { startClaudeLocator, type ClientOptions } from './client'
@@ -5,6 +6,7 @@ import { patchReactDevtoolsHook } from './devtools-hook'
 import { editorOpener, type EditorWindow } from './editor'
 import { DEFAULT_LOCATION_FORMAT, DEFAULT_OPENCODE_URL, opencodeOpener } from './opencode'
 import { claudeOpener, createOpenHandler, DEFAULT_SIGNAL_FILE, ENDPOINT, type Opener, type OpenSignal } from './server'
+import { addVueSourceAttributes, type VueCompiler } from './templates'
 import { addSourceAttributes, COMPONENT_SOURCE_PROPERTY, shouldTransform, SOURCE_ATTRIBUTE } from './transform'
 
 export type { OpenSignal }
@@ -69,6 +71,19 @@ export interface ClaudeLocatorOptions {
 const inlineCall = (fn: (...args: never[]) => unknown, ...args: unknown[]): string =>
   `(${fn.toString()})(${args.map((arg) => JSON.stringify(arg)).join(',')});`
 
+// The project's own copy, so it matches the Vue version that compiles the app
+const loadVueCompiler = (projectRoot: string): VueCompiler | undefined => {
+  const require = createRequire(path.join(projectRoot, 'package.json'))
+  for (const name of ['vue/compiler-sfc', '@vue/compiler-sfc']) {
+    try {
+      return require(name) as VueCompiler
+    } catch {
+      // not installed under this name
+    }
+  }
+  return undefined
+}
+
 const isExcluded = (id: string, exclude: (RegExp | string)[]): boolean =>
   exclude.some((pattern) => (typeof pattern === 'string' ? id.includes(pattern) : pattern.test(id)))
 
@@ -83,7 +98,9 @@ export default function claudeLocator(options: ClaudeLocatorOptions = {}): Plugi
   } = options
   const targets = ([] as OpenTarget[]).concat(options.open ?? 'claude')
   let workspaceRoot = ''
+  let projectRoot = ''
   let base = '/'
+  let vueCompiler: VueCompiler | null | undefined
 
   return {
     name: 'claude-locator',
@@ -91,6 +108,7 @@ export default function claudeLocator(options: ClaudeLocatorOptions = {}): Plugi
     enforce: 'pre',
 
     configResolved(config) {
+      projectRoot = config.root
       workspaceRoot = path.resolve(options.workspaceRoot ?? searchForWorkspaceRoot(config.root))
       // A full-URL base (a CDN) does not serve the dev endpoint; fall back to the origin
       base = config.base.startsWith('/') ? config.base : '/'
@@ -132,10 +150,17 @@ export default function claudeLocator(options: ClaudeLocatorOptions = {}): Plugi
       // React Refresh code and would shift every line number
       order: 'pre',
       handler(code, id) {
-        if (!jsxSource || !shouldTransform(id) || isExcluded(id, exclude)) {
+        if (!jsxSource || isExcluded(id, exclude)) {
           return null
         }
-        return addSourceAttributes(code, id, workspaceRoot)
+        // The SFC itself; its compiled parts come back as `App.vue?vue&type=...` and are left alone
+        if (/\.vue$/.test(id) && !id.includes('/node_modules/')) {
+          if (vueCompiler === undefined) {
+            vueCompiler = loadVueCompiler(projectRoot) ?? null
+          }
+          return vueCompiler ? addVueSourceAttributes(code, id, workspaceRoot, vueCompiler) : null
+        }
+        return shouldTransform(id) ? addSourceAttributes(code, id, workspaceRoot) : null
       },
     },
 
@@ -145,6 +170,7 @@ export default function claudeLocator(options: ClaudeLocatorOptions = {}): Plugi
         endpoint: hasServerTarget ? `${base.replace(/\/?$/, '/')}${ENDPOINT}` : null,
         copyFormat: targets.includes('clipboard') ? (options.locationFormat ?? DEFAULT_LOCATION_FORMAT) : null,
         workspaceRoot,
+        projectRoot,
         modifier: `${modifier}Key`,
         attribute: SOURCE_ATTRIBUTE,
         componentProperty: COMPONENT_SOURCE_PROPERTY,

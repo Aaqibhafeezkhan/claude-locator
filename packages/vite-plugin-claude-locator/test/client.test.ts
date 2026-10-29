@@ -6,6 +6,7 @@ const options: ClientOptions = {
   endpoint: '/base/__claude-open',
   copyFormat: null,
   workspaceRoot: '/repo',
+  projectRoot: '/repo/app',
   modifier: 'altKey',
   attribute: 'data-claude-source',
   componentProperty: '__claudeSource',
@@ -244,5 +245,56 @@ describe('clipboard', () => {
     document.execCommand = vi.fn(() => false)
     api = startClaudeLocator({ ...options, endpoint: null, copyFormat: '{path}:{line}' })
     expect(await api.open({ file: 'src/App.tsx', line: 1 })).toBe(false)
+  })
+})
+
+describe('findTree beyond React', () => {
+  it('Svelte: the element from __svelte_meta, then each component usage, paths from the project root', () => {
+    api = startClaudeLocator(options)
+    document.body.innerHTML = '<button>b</button>'
+    const button = document.querySelector('button') as Element
+    Object.assign(button, {
+      __svelte_meta: {
+        loc: { file: 'src/Counter.svelte', line: 5, column: 0 },
+        parent: {
+          type: 'component', file: 'src/App.svelte', line: 10, column: 4, componentTag: 'Counter',
+          parent: { type: 'render', file: 'src/Panel.svelte', line: 6, column: 2,
+            parent: { type: 'component', file: 'src/App.svelte', line: 9, column: 2, componentTag: 'Panel', parent: null } },
+        },
+      },
+    })
+    expect(api.findTree(button)).toEqual([
+      { label: '<button>', source: { file: '/repo/app/src/Counter.svelte', line: 5, column: 1 } },
+      { label: 'Counter', source: { file: '/repo/app/src/App.svelte', line: 10, column: 5 } },
+      { label: 'Panel', source: { file: '/repo/app/src/App.svelte', line: 9, column: 3 } },
+    ])
+  })
+
+  it('Vue: the component instances above the element, each with its file', () => {
+    api = startClaudeLocator(options)
+    document.body.innerHTML = '<button data-claude-source="src/Counter.vue:8:3">b</button>'
+    const button = document.querySelector('button') as Element
+    const app = { type: { __name: 'App', __file: '/repo/src/App.vue' }, parent: null }
+    const panel = { type: { __file: '/repo/src/Panel.vue' }, parent: app }
+    Object.defineProperty(button, '__vueParentComponent', { value: { type: { __name: 'Counter', __file: '/repo/src/Counter.vue' }, parent: panel } })
+    expect(api.findTree(button).map((item) => `${item.label} ${item.source?.file}:${item.source?.line}`)).toEqual([
+      '<button> src/Counter.vue:8',
+      'Counter /repo/src/Counter.vue:1',
+      'Panel /repo/src/Panel.vue:1',
+      'App /repo/src/App.vue:1',
+    ])
+  })
+
+  it('anything else: each file the elements above come from, the element\'s own first', () => {
+    api = startClaudeLocator(options)
+    document.body.innerHTML =
+      '<main data-claude-source="src/App.jsx:6:5"><section data-claude-source="src/Panel.jsx:2:10">' +
+      '<button data-claude-source="src/Counter.jsx:6:5">b</button></section></main>'
+    expect(api.findTree(document.querySelector('button') as Element).map((item) => item.label)).toEqual([
+      '<button>',
+      'Counter',
+      'Panel',
+      'App',
+    ])
   })
 })

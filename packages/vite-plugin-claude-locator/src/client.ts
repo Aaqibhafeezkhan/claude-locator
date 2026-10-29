@@ -10,6 +10,8 @@ export interface ClientOptions {
   copyFormat: string | null
   /** The workspace root, for `{path}` in `copyFormat`. */
   workspaceRoot: string
+  /** Vite's project root: Svelte records paths relative to it. */
+  projectRoot: string
   /** The modifier held while hovering and clicking. */
   modifier: 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'
   /** The attribute the JSX transform adds, e.g. `data-claude-source`. */
@@ -59,6 +61,11 @@ export function startClaudeLocator(options: ClientOptions): ClientApi {
     _debugOwner?: Fiber | null
     return?: Fiber | null
   }
+  // What Svelte's dev mode keeps on each element: where it is written, and the component usages above it
+  type SvelteParent = { type?: string; file?: string; line?: number; column?: number; componentTag?: string; parent?: SvelteParent | null }
+  type SvelteMeta = { loc?: { file?: string; line?: number; column?: number }; parent?: SvelteParent | null }
+  // What Vue keeps on each element in dev: the component instance that rendered it
+  type VueInstance = { type?: { __name?: string; name?: string; __file?: string }; parent?: VueInstance | null }
 
   const globalWindow = window as unknown as { __claudeLocator?: ClientApi }
   if (globalWindow.__claudeLocator) {
@@ -98,17 +105,31 @@ export function startClaudeLocator(options: ClientOptions): ClientApi {
     return undefined
   }
 
-  // The attribute the JSX transform added: React 19 has no `_debugSource`
+  // The attribute the transform added (JSX, Vue and Astro templates): React 19 has no `_debugSource`
   const sourceFromAttribute = (element: Element): Source | undefined => {
     const value = element.getAttribute(options.attribute)
     return value ? parsePosition(value) : undefined
   }
 
-  // The attribute comes first: it is taken from the file as written, while `_debugSource` is computed after
-  // other transforms ran (@vitejs/plugin-react 4 prepends React Refresh code, shifting its lines)
+  // Svelte writes paths relative to the Vite project root, and 0-based columns
+  const fromProjectPath = (file: string): string =>
+    /^([\\/]|[A-Za-z]:)/.test(file) ? file : `${options.projectRoot.replace(/[\\/]+$/, '')}/${file}`
+
+  const svelteMetaOf = (element: Element): SvelteMeta | undefined =>
+    (element as unknown as { __svelte_meta?: SvelteMeta }).__svelte_meta
+
+  const sourceFromSvelte = (element: Element): Source | undefined => {
+    const loc = svelteMetaOf(element)?.loc
+    return loc && loc.file && isProjectFile(loc.file)
+      ? { file: fromProjectPath(loc.file), line: loc.line, column: loc.column === undefined ? undefined : loc.column + 1 }
+      : undefined
+  }
+
+  // The attribute and Svelte's own record come first: they are taken from the file as written, while
+  // `_debugSource` is computed after other transforms ran (@vitejs/plugin-react 4 prepends React Refresh code)
   const findSource = (start: Element): Source | undefined => {
     for (let element: Element | null = start; element; element = element.parentElement) {
-      const source = sourceFromAttribute(element)
+      const source = sourceFromAttribute(element) || sourceFromSvelte(element)
       if (source) {
         return source
       }
@@ -148,23 +169,93 @@ export function startClaudeLocator(options: ClientOptions): ClientApi {
     return undefined
   }
 
-  const findTree = (start: Element): TreeItem[] => {
-    const items: TreeItem[] = [{ label: `<${start.tagName.toLowerCase()}>`, source: findSource(start) }]
+  const baseName = (file: string): string => (file.split(/[\\/]/).pop() || file).replace(/\.[^.]+$/, '')
+
+  // Pushes a row unless it repeats the last one (`memo(Card)` puts two fibers for the same component in a row)
+  const pushItem = (items: TreeItem[], item: TreeItem): void => {
+    const last = items[items.length - 1]
+    const isRepeat =
+      last.label === item.label && last.source?.file === item.source?.file && last.source?.line === item.source?.line
+    if (!isRepeat && items.length < 40) {
+      items.push(item)
+    }
+  }
+
+  // React: the fiber's `return` chain, each component with where the transform recorded it is defined
+  const reactTree = (start: Element, items: TreeItem[]): boolean => {
     let fiber = fiberOf(start)?.return || null
-    for (let depth = 0; fiber && depth < 500 && items.length < 40; depth += 1) {
+    if (!fiber) {
+      return false
+    }
+    for (let depth = 0; fiber && depth < 500; depth += 1) {
       const tag = componentTag(fiber)
       const name = tag ? tag.name : componentName(asComponent(fiber.type))
       if (name) {
         // Without the transform (React 18): where the component was used, not where it is defined
-        const source = tag ? parsePosition(tag.source) : fromDebugSource(fiber._debugSource)
-        const last = items[items.length - 1]
-        // `memo(Card)` puts two fibers for the same component in a row
-        const isRepeat = last.label === name && last.source?.file === source?.file && last.source?.line === source?.line
-        if (!isRepeat) {
-          items.push({ label: name, source })
-        }
+        pushItem(items, { label: name, source: tag ? parsePosition(tag.source) : fromDebugSource(fiber._debugSource) })
       }
       fiber = fiber.return || null
+    }
+    return true
+  }
+
+  // Svelte 5: each component above the element, with where it is used
+  const svelteTree = (start: Element, items: TreeItem[]): boolean => {
+    let element: Element | null = start
+    while (element && !svelteMetaOf(element)) {
+      element = element.parentElement
+    }
+    const meta = element && svelteMetaOf(element)
+    if (!meta) {
+      return false
+    }
+    for (let parent = meta.parent || null, depth = 0; parent && depth < 100; parent = parent.parent || null, depth += 1) {
+      if (parent.type === 'component' && parent.file) {
+        const source = isProjectFile(parent.file)
+          ? { file: fromProjectPath(parent.file), line: parent.line, column: (parent.column ?? 0) + 1 }
+          : undefined
+        pushItem(items, { label: parent.componentTag || baseName(parent.file), source })
+      }
+    }
+    return true
+  }
+
+  // Vue: the component instances above the element, each with its file
+  const vueTree = (start: Element, items: TreeItem[]): boolean => {
+    let element: Element | null = start
+    let instance: VueInstance | undefined
+    for (; element && !instance; element = element.parentElement) {
+      instance = (element as unknown as { __vueParentComponent?: VueInstance }).__vueParentComponent
+    }
+    if (!instance) {
+      return false
+    }
+    for (let current: VueInstance | null = instance, depth = 0; current && depth < 100; current = current.parent || null, depth += 1) {
+      const file = current.type?.__file
+      const name = current.type?.__name || current.type?.name || (file ? baseName(file) : undefined)
+      if (name) {
+        pushItem(items, { label: name, source: file && isProjectFile(file) ? { file, line: 1, column: 1 } : undefined })
+      }
+    }
+    return true
+  }
+
+  // Any other framework (Solid, Preact, Astro, ...): each file the elements above come from, innermost first
+  const fileTree = (start: Element, items: TreeItem[]): void => {
+    let currentFile: string | undefined
+    for (let element: Element | null = start; element; element = element.parentElement) {
+      const source = sourceFromAttribute(element)
+      if (source && source.file !== currentFile) {
+        currentFile = source.file
+        pushItem(items, { label: baseName(source.file), source })
+      }
+    }
+  }
+
+  const findTree = (start: Element): TreeItem[] => {
+    const items: TreeItem[] = [{ label: `<${start.tagName.toLowerCase()}>`, source: findSource(start) }]
+    if (!reactTree(start, items) && !svelteTree(start, items) && !vueTree(start, items)) {
+      fileTree(start, items)
     }
     return items
   }

@@ -82,7 +82,7 @@ claudeLocator({ open: ['claude', 'editor'], editor: 'cursor' })
 
 So in Cursor, Windsurf or VS Code with an agent, the agent's built-in browser can stay the browser and the file opens in the editor next to it. `editor` names the launcher; left out, `LAUNCH_EDITOR`, then `EDITOR`, then the editor that is running decides. Some installs put an agent CLI on `PATH` under the editor's name (Cursor's `~/.local/bin/cursor` shim runs the editor only when the IDE's own `cursor` is also on `PATH`); give the full path then, such as `/Applications/Cursor.app/Contents/Resources/app/bin/cursor`.
 
-Tried: the Claude desktop app, and Cursor through its launcher on macOS. Other editors go through the same `launch-editor` package Vite uses but have not been tried with this plugin.
+Verified: the Claude desktop app. The `'editor'` target goes through the same `launch-editor` package Vite uses; with Cursor on macOS the launcher runs and Cursor starts, but the file showing in its window is not confirmed yet, and other editors have not been tried with this plugin.
 
 ## How it works
 

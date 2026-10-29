@@ -9,7 +9,8 @@ const TARGETS = [
 
 export function Targets() {
   return (
-    <section className="targets">
+    <section className="section">
+      <p className="eyebrow">Targets</p>
       <h2>Opens where you work</h2>
       <div className="target-grid">
         {TARGETS.map((target) => (

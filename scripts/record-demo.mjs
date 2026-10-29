@@ -78,7 +78,7 @@ await evaluate(`(() => {
   key.style.cssText = 'position:fixed;right:20px;bottom:20px;z-index:2147483647;padding:6px 12px;border-radius:8px;font:600 15px system-ui;background:#d97757;color:#fff;display:none'
   document.body.append(cursor, key)
   window.open = () => null
-  window.scrollTo(0, 230)
+  window.scrollTo(0, document.querySelector('.try').getBoundingClientRect().top + window.scrollY - 24)
 })()`)
 
 let frame = 0

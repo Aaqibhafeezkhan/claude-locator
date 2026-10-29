@@ -15,7 +15,13 @@ export function App() {
       <Targets />
       <Install />
       <footer className="footer">
-        MIT · <a href="https://github.com/scs0209/claude-locator">github.com/scs0209/claude-locator</a>
+        <span>
+          MIT · <a href="https://github.com/scs0209/claude-locator">github.com/scs0209/claude-locator</a>
+        </span>
+        <span>
+          Design tokens: <a href="https://github.com/nexu-io/open-design/tree/main/design-systems/mono">OpenDesign Mono</a>{' '}
+          (Apache-2.0)
+        </span>
       </footer>
     </div>
   )

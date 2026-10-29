@@ -17,7 +17,8 @@ if (isDevMode()) {
 
 export function Install() {
   return (
-    <section className="install">
+    <section className="section install">
+      <p className="eyebrow">Install</p>
       <h2>Add it to your app</h2>
       <pre>
         <code>npm install -D vite-plugin-claude-locator</code>

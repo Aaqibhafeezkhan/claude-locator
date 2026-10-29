@@ -1,7 +1,7 @@
 export function Hero() {
   return (
     <header className="hero">
-      <p className="eyebrow">claude-locator</p>
+      <p className="eyebrow">claude-locator · click-to-source for agents</p>
       <h1>
         Hold <kbd>⌥ Option</kbd> and click.
         <br />
@@ -13,13 +13,25 @@ export function Hero() {
       </p>
       <ul className="steps">
         <li>
-          <kbd>⌥</kbd> + hover <span>outline and file:line</span>
+          <span className="eyebrow">01</span>
+          <div>
+            <kbd>⌥</kbd> + hover
+          </div>
+          <span>outline and file:line</span>
         </li>
         <li>
-          <kbd>⌥</kbd> + click <span>open it</span>
+          <span className="eyebrow">02</span>
+          <div>
+            <kbd>⌥</kbd> + click
+          </div>
+          <span>open that line</span>
         </li>
         <li>
-          <kbd>⌥</kbd> + right-click <span>the component tree</span>
+          <span className="eyebrow">03</span>
+          <div>
+            <kbd>⌥</kbd> + right-click
+          </div>
+          <span>the component tree</span>
         </li>
       </ul>
       <p className="note">On this page a click opens the file on GitHub. Needs a keyboard: try it on a desktop.</p>

@@ -9,12 +9,10 @@ const PRODUCTS = [
 
 export function Playground() {
   return (
-    <div className="playground">
-      <div className="playground-bar">
-        <span className="dot" />
-        <span className="dot" />
-        <span className="dot" />
-        <span className="address">localhost:5173</span>
+    <div className="panel">
+      <div className="panel-head">
+        <span className="eyebrow">localhost:5173</span>
+        <span className="status">dev server</span>
       </div>
       <div className="shop">
         <h2>Try it here</h2>

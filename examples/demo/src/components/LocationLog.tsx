@@ -15,21 +15,26 @@ export function LocationLog() {
   }, [])
 
   return (
-    <aside className="log">
-      <h2>Opened</h2>
-      {entries.length === 0 ? (
-        <p className="log-empty">Option+click something on the left.</p>
-      ) : (
-        <ol>
-          {entries.map((entry, index) => (
-            <li key={`${entry.file}:${entry.line}:${index}`}>
-              <code>
-                {entry.file}:{entry.line}
-              </code>
-            </li>
-          ))}
-        </ol>
-      )}
+    <aside className="panel log">
+      <div className="panel-head">
+        <span className="eyebrow">Opened</span>
+        <span className="eyebrow">{entries.length}</span>
+      </div>
+      <div className="log-body">
+        {entries.length === 0 ? (
+          <p className="log-empty">Option+click something on the left.</p>
+        ) : (
+          <ol>
+            {entries.map((entry, index) => (
+              <li key={`${entry.file}:${entry.line}:${index}`}>
+                <code>
+                  {entry.file}:{entry.line}
+                </code>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
     </aside>
   )
 }

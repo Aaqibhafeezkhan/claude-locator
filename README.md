@@ -221,4 +221,4 @@ Try the Claude Code plugin from this folder without installing it: `claude --plu
 
 ## License
 
-MIT
+MIT. The demo site uses the design tokens of [OpenDesign's Mono design system](https://github.com/nexu-io/open-design/tree/main/design-systems/mono) (Apache-2.0).

@@ -7,6 +7,6 @@
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^3.1.2",
     "vite": "^5.4.21",
-    "vite-plugin-claude-locator": "workspace:*"
+    "vite-plugin-claude-locator": "file:../../packages/vite-plugin-claude-locator"
   }
 }

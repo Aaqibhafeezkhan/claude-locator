@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/logo.svg" alt="" width="96" height="96" />
+
 # claude-locator
 
 **Hold <kbd>⌥ Option</kbd> and click anything in your running app. Land on the line that drew it — in Claude, Cursor, VS Code, OpenCode or Codex.**

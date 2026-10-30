@@ -1,7 +1,10 @@
 export function Hero() {
   return (
     <header className="hero">
-      <p className="eyebrow">claude-locator · click-to-source for agents</p>
+      <p className="eyebrow brand">
+        <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width={28} height={28} />
+        claude-locator · click-to-source for agents
+      </p>
       <h1>
         Hold <kbd>⌥ Option</kbd> and click.
         <br />

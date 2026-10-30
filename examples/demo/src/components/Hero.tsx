@@ -11,8 +11,8 @@ export function Hero() {
         Land on the line that drew it.
       </h1>
       <p className="lead">
-        Point at anything in your running app and open its source where you work: Claude, Cursor, VS Code, OpenCode or
-        Codex. React, Vue, Svelte, Solid, Preact, Astro and Angular.
+        Point at anything in your running app and open its source where you work, with any coding agent: Claude, Cursor,
+        VS Code, Zed, OpenCode or Codex. In any framework: React, Vue, Svelte, Solid, Preact, Astro and Angular.
       </p>
       <ul className="steps">
         <li>

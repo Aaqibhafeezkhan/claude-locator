@@ -1,6 +1,8 @@
 # vite-plugin-claude-locator
 
-Hold <kbd>⌥ Option</kbd> and click anything in your running app to open the line that drew it — in the Claude desktop app, Cursor, VS Code, Zed, OpenCode, or on the clipboard for Codex and any agent. <kbd>⌥</kbd>+right-click lists the components above it.
+Hold <kbd>⌥ Option</kbd> and click anything in your running app to open the line that drew it — in any framework, with any coding agent: the Claude desktop app, Cursor, VS Code, Zed, OpenCode, or on the clipboard for Codex. <kbd>⌥</kbd>+right-click lists the components above it.
+
+The name comes from where it started; it is not tied to Claude. On the Claude desktop app with React, the app's own element picker already covers this.
 
 React 18 · 19, Vue 3, Svelte 5, Solid, Preact, Astro and Angular. Development only.
 

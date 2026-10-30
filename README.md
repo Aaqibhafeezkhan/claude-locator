@@ -4,7 +4,7 @@
 
 # claude-locator
 
-**Hold <kbd>⌥ Option</kbd> and click anything in your running app. Land on the line that drew it — in Claude, Cursor, VS Code, OpenCode or Codex.**
+**Hold <kbd>⌥ Option</kbd> and click anything in your running app. Land on the line that drew it — in any framework, with any coding agent: Claude, Cursor, VS Code, Zed, OpenCode or Codex.**
 
 [![npm](https://img.shields.io/npm/v/vite-plugin-claude-locator?color=d97757)](https://www.npmjs.com/package/vite-plugin-claude-locator)
 [![CI](https://github.com/scs0209/claude-locator/actions/workflows/ci.yml/badge.svg)](https://github.com/scs0209/claude-locator/actions/workflows/ci.yml)
@@ -20,12 +20,16 @@
 
 You see the bug on the page; your agent needs the file. claude-locator turns "the price on the second card" into `src/components/ProductCard.tsx:12`, opened where you and your agent work — without the React DevTools extension, and inside the built-in browsers of coding agents, which do not hand `vscode://` or `cursor://` links to your editor.
 
+The name comes from where it started, the Claude desktop app. It is not tied to Claude.
+
 - **⌥ + hover** outlines the element, with its component and `file:line`
 - **⌥ + click** opens that line
 - **⌥ + right-click** lists the element and every component above it; open any of them
 - **React, Vue, Svelte, Solid, Preact, Astro and Angular** (React 18 and 19, Astro 5 and 7)
 - **Opens in** the Claude desktop app's Files pane, your editor, OpenCode's prompt, the clipboard (Codex and any agent), a URL or a function of yours
 - **Development only.** Nothing ships in `vite build`, and the click never reaches your app
+
+> **Claude desktop app with React?** The app's preview has its own element picker: it hands Claude the component, its source location, the HTML, styles and a screenshot, with nothing to install. Use that. claude-locator is for the rest: **Vue, Svelte, Solid, Preact, Astro and Angular** (where the picker finds no source), **other agents and editors** (Cursor, VS Code, Zed, OpenCode, Codex), **any browser**, and **opening the file itself** at the line, with the component tree to move up from there.
 
 ## Install
 

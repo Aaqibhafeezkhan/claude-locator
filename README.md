@@ -212,6 +212,28 @@ claudeLocator({
 - **Tested versions** (sample apps in `examples/`): React 18.3 and 19, Vue 3.5, Svelte 5, Solid 1.9, Preact 10, Astro 5.18 and 7.4, Angular 20. Svelte 4 keeps the same element records, so element lines should work there too, without the component chain; Astro 6 has not been tried.
 - Only top-level components get a definition in the tree. Lowercase JSX tags that are not DOM elements (`@react-three/fiber`'s `<mesh>`) get the attribute too; list such files in `exclude`.
 
+## Troubleshooting
+
+### Option+click does nothing
+
+Check the dev server output for a `[claude-locator]` line. If there is no line, the click did not reach the server: check that the page script loaded and that the page is using the correct server port.
+
+### The Claude Files pane does not open
+
+Make sure the Claude desktop session is open in a window, the file is inside that session's folder, and the Claude Code plugin is installed.
+
+### Cursor opens nothing
+
+The `cursor` command on `PATH` may be an agent CLI shim rather than the app launcher. Set `editor: 'cursor'` in the plugin options so claude-locator uses the installed app launcher.
+
+### The editor tab appears a second later
+
+This is expected. The launcher hands the file to the already-running editor, which may take a moment to show the tab.
+
+### Astro 7 does not pick up config changes
+
+Astro 7 runs `astro dev` in the background. Stop it with `astro dev stop` before starting it again after changing the config.
+
 ## Develop
 
 ```bash

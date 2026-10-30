@@ -1,0 +1,41 @@
+name: It opened the wrong place, or nothing
+description: A click that did not land on the right file and line, or an error
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you clicked, what you expected to open, and what opened instead (or the error).
+    validations:
+      required: true
+  - type: input
+    id: framework
+    attributes:
+      label: Framework and version
+      placeholder: React 19.1, Vue 3.5, Astro 7.4, ...
+    validations:
+      required: true
+  - type: input
+    id: target
+    attributes:
+      label: Where it should open
+      placeholder: Claude desktop app, Cursor, VS Code, Zed, OpenCode, clipboard, ...
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser
+      placeholder: Claude desktop's built-in browser, Cursor's browser, Chrome, ...
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      placeholder: vite-plugin-claude-locator 0.2.1, Vite 6.4, OS
+  - type: textarea
+    id: config
+    attributes:
+      label: claudeLocator options and dev server log
+      description: Your `claudeLocator({ ... })` call, and any `[claude-locator]` lines the dev server printed.
+      render: shell

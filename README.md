@@ -216,7 +216,7 @@ claudeLocator({
 
 ### Option+click does nothing
 
-Check the dev server output for a `[claude-locator]` line. If there is no line, the click did not reach the server: check that the page script loaded and that the page is using the correct server port.
+Check the dev server output for a `[claude-locator]` line (with the standalone server, `npx claude-locator`, it shows up in that server's terminal). If there is no line, the click did not reach the server: check that the page script loaded (`window.__claudeLocator` exists in the page) and that the page is using the correct server port.
 
 ### The Claude Files pane does not open
 
@@ -224,7 +224,7 @@ Make sure the Claude desktop session is open in a window, the file is inside tha
 
 ### Cursor opens nothing
 
-The `cursor` command on `PATH` may be an agent CLI shim rather than the app launcher. Set `editor: 'cursor'` in the plugin options so claude-locator uses the installed app launcher.
+The `cursor` command on `PATH` may be an agent CLI shim rather than the app launcher. Set `editor: 'cursor'` in the plugin options so claude-locator uses the installed app launcher. That fallback is macOS-only; elsewhere, put the IDE's own launcher on `PATH` or pass its full path as `editor`.
 
 ### The editor tab appears a second later
 

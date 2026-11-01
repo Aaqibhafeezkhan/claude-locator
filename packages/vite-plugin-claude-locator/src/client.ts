@@ -65,7 +65,7 @@ export function startClaudeLocator(options: ClientOptions): ClientApi {
   }
   // What Svelte's dev mode keeps on each element: where it is written, and the component usages above it
   type SvelteParent = { type?: string; file?: string; line?: number; column?: number; componentTag?: string; parent?: SvelteParent | null }
-  type SvelteMeta = { loc?: { file?: string; line?: number; column?: number }; parent?: SvelteParent | null }
+  type SvelteMeta = { loc?: { file?: string; line?: number; column?: number; char?: number }; parent?: SvelteParent | null }
   // What Vue keeps on each element in dev: the component instance that rendered it
   type VueInstance = { type?: { __name?: string; name?: string; __file?: string }; parent?: VueInstance | null }
   // Angular's dev-mode globals, and what it records on each component class
@@ -127,11 +127,14 @@ export function startClaudeLocator(options: ClientOptions): ClientApi {
   const svelteMetaOf = (element: Element): SvelteMeta | undefined =>
     (element as unknown as { __svelte_meta?: SvelteMeta }).__svelte_meta
 
+  // Columns are 0-based in both; lines are 1-based in Svelte 5 and 0-based in Svelte 4, whose `loc` also has `char`
   const sourceFromSvelte = (element: Element): Source | undefined => {
     const loc = svelteMetaOf(element)?.loc
-    return loc && loc.file && isProjectFile(loc.file)
-      ? { file: fromProjectPath(loc.file), line: loc.line, column: loc.column === undefined ? undefined : loc.column + 1 }
-      : undefined
+    if (!loc || !loc.file || !isProjectFile(loc.file)) {
+      return undefined
+    }
+    const line = loc.line === undefined ? undefined : loc.char === undefined ? loc.line : loc.line + 1
+    return { file: fromProjectPath(loc.file), line, column: loc.column === undefined ? undefined : loc.column + 1 }
   }
 
   const angular = (): AngularGlobals | undefined => (window as unknown as { ng?: AngularGlobals }).ng

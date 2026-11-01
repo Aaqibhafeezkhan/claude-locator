@@ -81,7 +81,6 @@ In the desktop app, where `/plugin` does not run: click **+** next to the prompt
 | **Angular** 20 | standalone server + page script | ✅ the owning component's class | ✅ component hosts |
 | Anything else (webpack, Next.js, …) | standalone server + page script | elements tagged by your build, or nothing | by file |
 
-Svelte 4 records the clicked element's source location, but does not retain the component-parent chain. Option+click therefore opens the element's file and line; Option+right-click does not show Svelte component ancestors. The Svelte 5 sample retains the component-usage tree.
 
 <details>
 <summary><b>Astro</b></summary>
@@ -243,7 +242,7 @@ pnpm install
 pnpm build && pnpm test          # the samples use the built package
 claude plugin test plugin        # the Claude Code plugin's tests
 pnpm dev:react19                 # or: pnpm --filter example-{react18,vue,svelte,solid,preact,astro,angular,demo} dev
-# Svelte 4 sample (after the root build): cd examples/svelte4 && pnpm install && pnpm dev
+pnpm --filter example-svelte4 dev
 CLAUDE_LOCATOR_OPEN=claude,editor CLAUDE_LOCATOR_EDITOR=cursor pnpm dev:react19
 node scripts/record-demo.mjs     # re-record docs/demo.gif from the demo site
 ```

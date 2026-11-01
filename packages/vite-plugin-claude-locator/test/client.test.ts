@@ -270,6 +270,17 @@ describe('findTree beyond React', () => {
     ])
   })
 
+  it('Svelte 4: 0-based lines (its loc has char), and no component chain', () => {
+    api = startClaudeLocator(options)
+    document.body.innerHTML = '<button>b</button>'
+    const button = document.querySelector('button') as Element
+    Object.assign(button, { __svelte_meta: { loc: { file: 'src/Counter.svelte', line: 4, column: 0, char: 36 } } })
+    expect(api.findSource(button)).toEqual({ file: '/repo/app/src/Counter.svelte', line: 5, column: 1 })
+    expect(api.findTree(button)).toEqual([
+      { label: '<button>', source: { file: '/repo/app/src/Counter.svelte', line: 5, column: 1 } },
+    ])
+  })
+
   it('Vue: the component instances above the element, each with its file', () => {
     api = startClaudeLocator(options)
     document.body.innerHTML = '<button data-claude-source="src/Counter.vue:8:3">b</button>'

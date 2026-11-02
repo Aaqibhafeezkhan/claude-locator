@@ -81,7 +81,6 @@ In the desktop app, where `/plugin` does not run: click **+** next to the prompt
 | **Angular** 20 | standalone server + page script | ✅ the owning component's class | ✅ component hosts |
 | Anything else (webpack, Next.js, …) | standalone server + page script | elements tagged by your build, or nothing | by file |
 
-
 <details>
 <summary><b>Astro</b></summary>
 

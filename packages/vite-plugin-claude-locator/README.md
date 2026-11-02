@@ -4,7 +4,7 @@ Hold <kbd>⌥ Option</kbd> and click anything in your running app to open the li
 
 The name comes from where it started; it is not tied to Claude. On the Claude desktop app with React, the app's own element picker already covers this.
 
-React 18 · 19, Vue 3, Svelte 5, Solid, Preact, Astro and Angular. Development only.
+React 18 · 19, Vue 3, Svelte 4 · 5, Solid, Preact, Astro and Angular. Development only.
 
 **[Demo](https://scs0209.github.io/claude-locator/) · [Docs](https://github.com/scs0209/claude-locator#readme)**
 
